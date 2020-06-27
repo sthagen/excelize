@@ -42,16 +42,12 @@ type Cols struct {
 // GetCols return all the columns in a sheet by given worksheet name (case
 // sensitive). For example:
 //
-//    cols, err := f.Cols("Sheet1")
+//    cols, err := f.GetCols("Sheet1")
 //    if err != nil {
 //        fmt.Println(err)
 //        return
 //    }
-//    for cols.Next() {
-//        col, err := cols.Rows()
-//        if err != nil {
-//            fmt.Println(err)
-//        }
+//    for _, col := range cols {
 //        for _, rowCell := range col {
 //            fmt.Print(rowCell, "\t")
 //        }
@@ -71,13 +67,13 @@ func (f *File) GetCols(sheet string) ([][]string, error) {
 	return results, nil
 }
 
-// Next will return true if the next col element is found.
+// Next will return true if the next column is found.
 func (cols *Cols) Next() bool {
 	cols.curCol++
 	return cols.curCol <= cols.totalCol
 }
 
-// Error will return an error when the next col element is found.
+// Error will return an error when the error occurs.
 func (cols *Cols) Error() error {
 	return cols.err
 }
@@ -103,23 +99,33 @@ func (cols *Cols) Rows() ([]string, error) {
 		switch startElement := token.(type) {
 		case xml.StartElement:
 			inElement = startElement.Name.Local
+			if inElement == "row" {
+				cellCol = 0
+				cellRow++
+				for _, attr := range startElement.Attr {
+					if attr.Name.Local == "r" {
+						cellRow, _ = strconv.Atoi(attr.Value)
+					}
+				}
+			}
 			if inElement == "c" {
+				cellCol++
 				for _, attr := range startElement.Attr {
 					if attr.Name.Local == "r" {
 						if cellCol, cellRow, err = CellNameToCoordinates(attr.Value); err != nil {
 							return rows, err
 						}
-						blank := cellRow - len(rows)
-						for i := 1; i < blank; i++ {
-							rows = append(rows, "")
-						}
-						if cellCol == cols.curCol {
-							colCell := xlsxC{}
-							_ = decoder.DecodeElement(&colCell, &startElement)
-							val, _ := colCell.getValueFrom(cols.f, d)
-							rows = append(rows, val)
-						}
 					}
+				}
+				blank := cellRow - len(rows)
+				for i := 1; i < blank; i++ {
+					rows = append(rows, "")
+				}
+				if cellCol == cols.curCol {
+					colCell := xlsxC{}
+					_ = decoder.DecodeElement(&colCell, &startElement)
+					val, _ := colCell.getValueFrom(cols.f, d)
+					rows = append(rows, val)
 				}
 			}
 		}
@@ -127,7 +133,7 @@ func (cols *Cols) Rows() ([]string, error) {
 	return rows, nil
 }
 
-// Cols returns a columns iterator, used for streaming/reading data for a
+// Cols returns a columns iterator, used for streaming reading data for a
 // worksheet with a large data. For example:
 //
 //    cols, err := f.Cols("Sheet1")
@@ -156,10 +162,10 @@ func (f *File) Cols(sheet string) (*Cols, error) {
 		f.saveFileList(name, replaceRelationshipsNameSpaceBytes(output))
 	}
 	var (
-		inElement string
-		cols      Cols
-		cellCol   int
-		err       error
+		inElement            string
+		cols                 Cols
+		cellCol, curRow, row int
+		err                  error
 	)
 	cols.sheetXML = f.readXML(name)
 	decoder := f.xmlNewDecoder(bytes.NewReader(cols.sheetXML))
@@ -172,24 +178,29 @@ func (f *File) Cols(sheet string) (*Cols, error) {
 		case xml.StartElement:
 			inElement = startElement.Name.Local
 			if inElement == "row" {
+				row++
 				for _, attr := range startElement.Attr {
 					if attr.Name.Local == "r" {
-						if cols.totalRow, err = strconv.Atoi(attr.Value); err != nil {
+						if curRow, err = strconv.Atoi(attr.Value); err != nil {
 							return &cols, err
 						}
+						row = curRow
 					}
 				}
+				cols.totalRow = row
+				cellCol = 0
 			}
 			if inElement == "c" {
+				cellCol++
 				for _, attr := range startElement.Attr {
 					if attr.Name.Local == "r" {
 						if cellCol, _, err = CellNameToCoordinates(attr.Value); err != nil {
 							return &cols, err
 						}
-						if cellCol > cols.totalCol {
-							cols.totalCol = cellCol
-						}
 					}
+				}
+				if cellCol > cols.totalCol {
+					cols.totalCol = cellCol
 				}
 			}
 		}
