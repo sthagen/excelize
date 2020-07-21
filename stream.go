@@ -72,7 +72,7 @@ type StreamWriter struct {
 //
 func (f *File) NewStreamWriter(sheet string) (*StreamWriter, error) {
 	sheetID := f.getSheetID(sheet)
-	if sheetID == 0 {
+	if sheetID == -1 {
 		return nil, fmt.Errorf("sheet %s is not exist", sheet)
 	}
 	sw := &StreamWriter{
@@ -151,7 +151,7 @@ func (sw *StreamWriter) AddTable(hcell, vcell, format string) error {
 	}
 
 	table := xlsxTable{
-		XMLNS:       NameSpaceSpreadSheet,
+		XMLNS:       NameSpaceSpreadSheet.Value,
 		ID:          tableID,
 		Name:        name,
 		DisplayName: name,

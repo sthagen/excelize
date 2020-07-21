@@ -30,6 +30,7 @@ import (
 
 // File define a populated spreadsheet file struct.
 type File struct {
+	xmlAttr          map[string][]xml.Attr
 	checked          map[string]bool
 	sheetMap         map[string]string
 	CalcChain        *xlsxCalcChain
@@ -72,6 +73,7 @@ func OpenFile(filename string) (*File, error) {
 // newFile is object builder
 func newFile() *File {
 	return &File{
+		xmlAttr:          make(map[string][]xml.Attr),
 		checked:          make(map[string]bool),
 		sheetMap:         make(map[string]string),
 		Comments:         make(map[string]*xlsxComments),
@@ -166,6 +168,10 @@ func (f *File) workSheetReader(sheet string) (xlsx *xlsxWorksheet, err error) {
 			return
 		}
 		xlsx = new(xlsxWorksheet)
+		if _, ok := f.xmlAttr[name]; !ok {
+			d := f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML(name))))
+			f.xmlAttr[name] = append(f.xmlAttr[name], getRootElement(d)...)
+		}
 		if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML(name)))).
 			Decode(xlsx); err != nil && err != io.EOF {
 			err = fmt.Errorf("xml decode error: %s", err)
@@ -220,15 +226,24 @@ func checkSheet(xlsx *xlsxWorksheet) {
 // addRels provides a function to add relationships by given XML path,
 // relationship type, target and target mode.
 func (f *File) addRels(relPath, relType, target, targetMode string) int {
+	var uniqPart = map[string]string{
+		SourceRelationshipSharedStrings: "/xl/sharedStrings.xml",
+	}
 	rels := f.relsReader(relPath)
 	if rels == nil {
 		rels = &xlsxRelationships{}
 	}
 	var rID int
-	for _, rel := range rels.Relationships {
+	for idx, rel := range rels.Relationships {
 		ID, _ := strconv.Atoi(strings.TrimPrefix(rel.ID, "rId"))
 		if ID > rID {
 			rID = ID
+		}
+		if relType == rel.Type {
+			if partName, ok := uniqPart[rel.Type]; ok {
+				rels.Relationships[idx].Target = partName
+				return rID
+			}
 		}
 	}
 	rID++
@@ -243,14 +258,6 @@ func (f *File) addRels(relPath, relType, target, targetMode string) int {
 	})
 	f.Relationships[relPath] = rels
 	return rID
-}
-
-// replaceRelationshipsNameSpaceBytes provides a function to replace
-// XML tags to self-closing for compatible Microsoft Office Excel 2007.
-func replaceRelationshipsNameSpaceBytes(contentMarshal []byte) []byte {
-	var oldXmlns = stringToBytes(` xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`)
-	var newXmlns = []byte(templateNamespaceIDMap)
-	return bytesReplace(contentMarshal, oldXmlns, newXmlns, -1)
 }
 
 // UpdateLinkedValue fix linked values within a spreadsheet are not updating in
