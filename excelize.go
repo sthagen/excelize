@@ -323,7 +323,7 @@ func (f *File) AddVBAProject(bin string) error {
 	var err error
 	// Check vbaProject.bin exists first.
 	if _, err = os.Stat(bin); os.IsNotExist(err) {
-		return err
+		return fmt.Errorf("stat %s: no such file or directory", bin)
 	}
 	if path.Ext(bin) != ".bin" {
 		return errors.New("unsupported VBA project extension")
