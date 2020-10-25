@@ -93,21 +93,36 @@ type formulaArg struct {
 // formulaFuncs is the type of the formula functions.
 type formulaFuncs struct{}
 
+// tokenPriority defined basic arithmetic operator priority.
+var tokenPriority = map[string]int{
+	"^":  5,
+	"*":  4,
+	"/":  4,
+	"+":  3,
+	"-":  3,
+	"=":  2,
+	"<":  2,
+	"<=": 2,
+	">":  2,
+	">=": 2,
+	"&":  1,
+}
+
 // CalcCellValue provides a function to get calculated cell value. This
 // feature is currently in working processing. Array formula, table formula
 // and some other formulas are not supported currently.
 //
 // Supported formulas:
 //
-//    ABS, ACOS, ACOSH, ACOT, ACOTH, ARABIC, ASIN, ASINH, ATAN2, ATANH, BASE,
-//    CEILING, CEILING.MATH, CEILING.PRECISE, COMBIN, COMBINA, COS, COSH, COT,
-//    COTH, COUNTA, CSC, CSCH, DECIMAL, DEGREES, EVEN, EXP, FACT, FACTDOUBLE,
-//    FLOOR, FLOOR.MATH, FLOOR.PRECISE, GCD, INT, ISBLANK, ISERR, ISERROR,
-//    ISEVEN, ISNA, ISNONTEXT, ISNUMBER, ISO.CEILING, ISODD, LCM, LN, LOG,
-//    LOG10, MDETERM, MEDIAN, MOD, MROUND, MULTINOMIAL, MUNIT, NA, ODD, PI,
-//    POWER, PRODUCT, QUOTIENT, RADIANS, RAND, RANDBETWEEN, ROUND, ROUNDDOWN,
-//    ROUNDUP, SEC, SECH, SIGN, SIN, SINH, SQRT, SQRTPI, SUM, SUMIF, SUMSQ,
-//    TAN, TANH, TRUNC
+//    ABS, ACOS, ACOSH, ACOT, ACOTH, AND, ARABIC, ASIN, ASINH, ATAN2, ATANH,
+//    BASE, CEILING, CEILING.MATH, CEILING.PRECISE, COMBIN, COMBINA, COS,
+//    COSH, COT, COTH, COUNTA, CSC, CSCH, DATE, DECIMAL, DEGREES, EVEN, EXP,
+//    FACT, FACTDOUBLE, FLOOR, FLOOR.MATH, FLOOR.PRECISE, GCD, INT, ISBLANK,
+//    ISERR, ISERROR, ISEVEN, ISNA, ISNONTEXT, ISNUMBER, ISO.CEILING, ISODD,
+//    LCM, LN, LOG, LOG10, MDETERM, MEDIAN, MOD, MROUND, MULTINOMIAL, MUNIT,
+//    NA, ODD, OR, PI, POWER, PRODUCT, QUOTIENT, RADIANS, RAND, RANDBETWEEN,
+//    ROUND, ROUNDDOWN, ROUNDUP, SEC, SECH, SIGN, SIN, SINH, SQRT, SQRTPI,
+//    SUM, SUMIF, SUMSQ, TAN, TANH, TRUNC
 //
 func (f *File) CalcCellValue(sheet, cell string) (result string, err error) {
 	var (
@@ -131,15 +146,9 @@ func (f *File) CalcCellValue(sheet, cell string) (result string, err error) {
 
 // getPriority calculate arithmetic operator priority.
 func getPriority(token efp.Token) (pri int) {
-	var priority = map[string]int{
-		"*": 2,
-		"/": 2,
-		"+": 1,
-		"-": 1,
-	}
-	pri, _ = priority[token.TValue]
+	pri, _ = tokenPriority[token.TValue]
 	if token.TValue == "-" && token.TType == efp.TokenTypeOperatorPrefix {
-		pri = 3
+		pri = 6
 	}
 	if token.TSubType == efp.TokenSubTypeStart && token.TType == efp.TokenTypeSubexpression { // (
 		pri = 0
@@ -306,18 +315,96 @@ func (f *File) evalInfixExp(sheet string, tokens []efp.Token) (efp.Token, error)
 	return opdStack.Peek().(efp.Token), err
 }
 
-// calcAdd evaluate addition arithmetic operations.
-func calcAdd(opdStack *Stack) error {
-	if opdStack.Len() < 2 {
-		return errors.New("formula not valid")
-	}
-	rOpd := opdStack.Pop().(efp.Token)
-	lOpd := opdStack.Pop().(efp.Token)
-	lOpdVal, err := strconv.ParseFloat(lOpd.TValue, 64)
+// calcPow evaluate exponentiation arithmetic operations.
+func calcPow(rOpd, lOpd string, opdStack *Stack) error {
+	lOpdVal, err := strconv.ParseFloat(lOpd, 64)
 	if err != nil {
 		return err
 	}
-	rOpdVal, err := strconv.ParseFloat(rOpd.TValue, 64)
+	rOpdVal, err := strconv.ParseFloat(rOpd, 64)
+	if err != nil {
+		return err
+	}
+	result := math.Pow(lOpdVal, rOpdVal)
+	opdStack.Push(efp.Token{TValue: fmt.Sprintf("%g", result), TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
+	return nil
+}
+
+// calcEq evaluate equal arithmetic operations.
+func calcEq(rOpd, lOpd string, opdStack *Stack) error {
+	opdStack.Push(efp.Token{TValue: strings.ToUpper(strconv.FormatBool(rOpd == lOpd)), TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
+	return nil
+}
+
+// calcL evaluate less than arithmetic operations.
+func calcL(rOpd, lOpd string, opdStack *Stack) error {
+	lOpdVal, err := strconv.ParseFloat(lOpd, 64)
+	if err != nil {
+		return err
+	}
+	rOpdVal, err := strconv.ParseFloat(rOpd, 64)
+	if err != nil {
+		return err
+	}
+	opdStack.Push(efp.Token{TValue: strings.ToUpper(strconv.FormatBool(rOpdVal > lOpdVal)), TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
+	return nil
+}
+
+// calcLe evaluate less than or equal arithmetic operations.
+func calcLe(rOpd, lOpd string, opdStack *Stack) error {
+	lOpdVal, err := strconv.ParseFloat(lOpd, 64)
+	if err != nil {
+		return err
+	}
+	rOpdVal, err := strconv.ParseFloat(rOpd, 64)
+	if err != nil {
+		return err
+	}
+	opdStack.Push(efp.Token{TValue: strings.ToUpper(strconv.FormatBool(rOpdVal >= lOpdVal)), TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
+	return nil
+}
+
+// calcG evaluate greater than or equal arithmetic operations.
+func calcG(rOpd, lOpd string, opdStack *Stack) error {
+	lOpdVal, err := strconv.ParseFloat(lOpd, 64)
+	if err != nil {
+		return err
+	}
+	rOpdVal, err := strconv.ParseFloat(rOpd, 64)
+	if err != nil {
+		return err
+	}
+	opdStack.Push(efp.Token{TValue: strings.ToUpper(strconv.FormatBool(rOpdVal < lOpdVal)), TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
+	return nil
+}
+
+// calcGe evaluate greater than or equal arithmetic operations.
+func calcGe(rOpd, lOpd string, opdStack *Stack) error {
+	lOpdVal, err := strconv.ParseFloat(lOpd, 64)
+	if err != nil {
+		return err
+	}
+	rOpdVal, err := strconv.ParseFloat(rOpd, 64)
+	if err != nil {
+		return err
+	}
+	opdStack.Push(efp.Token{TValue: strings.ToUpper(strconv.FormatBool(rOpdVal <= lOpdVal)), TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
+	return nil
+}
+
+// calcSplice evaluate splice '&' operations.
+func calcSplice(rOpd, lOpd string, opdStack *Stack) error {
+	opdStack.Push(efp.Token{TValue: lOpd + rOpd, TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
+	return nil
+}
+
+// calcAdd evaluate addition arithmetic operations.
+func calcAdd(rOpd, lOpd string, opdStack *Stack) error {
+	lOpdVal, err := strconv.ParseFloat(lOpd, 64)
+	if err != nil {
+		return err
+	}
+	rOpdVal, err := strconv.ParseFloat(rOpd, 64)
 	if err != nil {
 		return err
 	}
@@ -327,17 +414,12 @@ func calcAdd(opdStack *Stack) error {
 }
 
 // calcSubtract evaluate subtraction arithmetic operations.
-func calcSubtract(opdStack *Stack) error {
-	if opdStack.Len() < 2 {
-		return errors.New("formula not valid")
-	}
-	rOpd := opdStack.Pop().(efp.Token)
-	lOpd := opdStack.Pop().(efp.Token)
-	lOpdVal, err := strconv.ParseFloat(lOpd.TValue, 64)
+func calcSubtract(rOpd, lOpd string, opdStack *Stack) error {
+	lOpdVal, err := strconv.ParseFloat(lOpd, 64)
 	if err != nil {
 		return err
 	}
-	rOpdVal, err := strconv.ParseFloat(rOpd.TValue, 64)
+	rOpdVal, err := strconv.ParseFloat(rOpd, 64)
 	if err != nil {
 		return err
 	}
@@ -347,17 +429,12 @@ func calcSubtract(opdStack *Stack) error {
 }
 
 // calcMultiply evaluate multiplication arithmetic operations.
-func calcMultiply(opdStack *Stack) error {
-	if opdStack.Len() < 2 {
-		return errors.New("formula not valid")
-	}
-	rOpd := opdStack.Pop().(efp.Token)
-	lOpd := opdStack.Pop().(efp.Token)
-	lOpdVal, err := strconv.ParseFloat(lOpd.TValue, 64)
+func calcMultiply(rOpd, lOpd string, opdStack *Stack) error {
+	lOpdVal, err := strconv.ParseFloat(lOpd, 64)
 	if err != nil {
 		return err
 	}
-	rOpdVal, err := strconv.ParseFloat(rOpd.TValue, 64)
+	rOpdVal, err := strconv.ParseFloat(rOpd, 64)
 	if err != nil {
 		return err
 	}
@@ -366,18 +443,13 @@ func calcMultiply(opdStack *Stack) error {
 	return nil
 }
 
-// calcDivide evaluate division arithmetic operations.
-func calcDivide(opdStack *Stack) error {
-	if opdStack.Len() < 2 {
-		return errors.New("formula not valid")
-	}
-	rOpd := opdStack.Pop().(efp.Token)
-	lOpd := opdStack.Pop().(efp.Token)
-	lOpdVal, err := strconv.ParseFloat(lOpd.TValue, 64)
+// calcDiv evaluate division arithmetic operations.
+func calcDiv(rOpd, lOpd string, opdStack *Stack) error {
+	lOpdVal, err := strconv.ParseFloat(lOpd, 64)
 	if err != nil {
 		return err
 	}
-	rOpdVal, err := strconv.ParseFloat(rOpd.TValue, 64)
+	rOpdVal, err := strconv.ParseFloat(rOpd, 64)
 	if err != nil {
 		return err
 	}
@@ -403,24 +475,36 @@ func calculate(opdStack *Stack, opt efp.Token) error {
 		result := 0 - opdVal
 		opdStack.Push(efp.Token{TValue: fmt.Sprintf("%g", result), TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
 	}
-
-	if opt.TValue == "+" {
-		if err := calcAdd(opdStack); err != nil {
-			return err
-		}
+	tokenCalcFunc := map[string]func(rOpd, lOpd string, opdStack *Stack) error{
+		"^":  calcPow,
+		"*":  calcMultiply,
+		"/":  calcDiv,
+		"+":  calcAdd,
+		"=":  calcEq,
+		"<":  calcL,
+		"<=": calcLe,
+		">":  calcG,
+		">=": calcGe,
+		"&":  calcSplice,
 	}
 	if opt.TValue == "-" && opt.TType == efp.TokenTypeOperatorInfix {
-		if err := calcSubtract(opdStack); err != nil {
+		if opdStack.Len() < 2 {
+			return errors.New("formula not valid")
+		}
+		rOpd := opdStack.Pop().(efp.Token)
+		lOpd := opdStack.Pop().(efp.Token)
+		if err := calcSubtract(rOpd.TValue, lOpd.TValue, opdStack); err != nil {
 			return err
 		}
 	}
-	if opt.TValue == "*" {
-		if err := calcMultiply(opdStack); err != nil {
-			return err
+	fn, ok := tokenCalcFunc[opt.TValue]
+	if ok {
+		if opdStack.Len() < 2 {
+			return errors.New("formula not valid")
 		}
-	}
-	if opt.TValue == "/" {
-		if err := calcDivide(opdStack); err != nil {
+		rOpd := opdStack.Pop().(efp.Token)
+		lOpd := opdStack.Pop().(efp.Token)
+		if err := fn(rOpd.TValue, lOpd.TValue, opdStack); err != nil {
 			return err
 		}
 	}
@@ -459,8 +543,8 @@ func (f *File) parseOperatorPrefixToken(optStack, opdStack *Stack, token efp.Tok
 // isOperatorPrefixToken determine if the token is parse operator prefix
 // token.
 func isOperatorPrefixToken(token efp.Token) bool {
-	if (token.TValue == "-" && token.TType == efp.TokenTypeOperatorPrefix) ||
-		token.TValue == "+" || token.TValue == "-" || token.TValue == "*" || token.TValue == "/" {
+	_, ok := tokenPriority[token.TValue]
+	if (token.TValue == "-" && token.TType == efp.TokenTypeOperatorPrefix) || ok {
 		return true
 	}
 	return false
@@ -700,19 +784,19 @@ func formulaCriteriaParser(exp string) (fc *formulaCriteria) {
 		fc.Type, fc.Condition = criteriaEq, match[1]
 		return
 	}
-	if match := regexp.MustCompile(`^<(.*)$`).FindStringSubmatch(exp); len(match) > 1 {
+	if match := regexp.MustCompile(`^<=(.*)$`).FindStringSubmatch(exp); len(match) > 1 {
 		fc.Type, fc.Condition = criteriaLe, match[1]
 		return
 	}
-	if match := regexp.MustCompile(`^>(.*)$`).FindStringSubmatch(exp); len(match) > 1 {
+	if match := regexp.MustCompile(`^>=(.*)$`).FindStringSubmatch(exp); len(match) > 1 {
 		fc.Type, fc.Condition = criteriaGe, match[1]
 		return
 	}
-	if match := regexp.MustCompile(`^<=(.*)$`).FindStringSubmatch(exp); len(match) > 1 {
+	if match := regexp.MustCompile(`^<(.*)$`).FindStringSubmatch(exp); len(match) > 1 {
 		fc.Type, fc.Condition = criteriaL, match[1]
 		return
 	}
-	if match := regexp.MustCompile(`^>=(.*)$`).FindStringSubmatch(exp); len(match) > 1 {
+	if match := regexp.MustCompile(`^>(.*)$`).FindStringSubmatch(exp); len(match) > 1 {
 		fc.Type, fc.Condition = criteriaG, match[1]
 		return
 	}
@@ -732,8 +816,11 @@ func formulaCriteriaParser(exp string) (fc *formulaCriteria) {
 // formulaCriteriaEval evaluate formula criteria expression.
 func formulaCriteriaEval(val string, criteria *formulaCriteria) (result bool, err error) {
 	var value, expected float64
+	var e error
 	var prepareValue = func(val, cond string) (value float64, expected float64, err error) {
-		value, _ = strconv.ParseFloat(val, 64)
+		if value, err = strconv.ParseFloat(val, 64); err != nil {
+			return
+		}
 		if expected, err = strconv.ParseFloat(criteria.Condition, 64); err != nil {
 			return
 		}
@@ -743,25 +830,17 @@ func formulaCriteriaEval(val string, criteria *formulaCriteria) (result bool, er
 	case criteriaEq:
 		return val == criteria.Condition, err
 	case criteriaLe:
-		if value, expected, err = prepareValue(val, criteria.Condition); err != nil {
-			return
-		}
-		return value <= expected, err
+		value, expected, e = prepareValue(val, criteria.Condition)
+		return value <= expected && e == nil, err
 	case criteriaGe:
-		if value, expected, err = prepareValue(val, criteria.Condition); err != nil {
-			return
-		}
-		return value >= expected, err
+		value, expected, e = prepareValue(val, criteria.Condition)
+		return value >= expected && e == nil, err
 	case criteriaL:
-		if value, expected, err = prepareValue(val, criteria.Condition); err != nil {
-			return
-		}
-		return value < expected, err
+		value, expected, e = prepareValue(val, criteria.Condition)
+		return value < expected && e == nil, err
 	case criteriaG:
-		if value, expected, err = prepareValue(val, criteria.Condition); err != nil {
-			return
-		}
-		return value > expected, err
+		value, expected, e = prepareValue(val, criteria.Condition)
+		return value > expected && e == nil, err
 	case criteriaBeg:
 		return strings.HasPrefix(val, criteria.Condition), err
 	case criteriaEnd:
@@ -3144,4 +3223,130 @@ func (fn *formulaFuncs) NA(argsList *list.List) (result string, err error) {
 	}
 	result = formulaErrorNA
 	return
+}
+
+// Logical Functions
+
+// AND function tests a number of supplied conditions and returns TRUE or
+// FALSE.
+func (fn *formulaFuncs) AND(argsList *list.List) (result string, err error) {
+	if argsList.Len() == 0 {
+		err = errors.New("AND requires at least 1 argument")
+		return
+	}
+	if argsList.Len() > 30 {
+		err = errors.New("AND accepts at most 30 arguments")
+		return
+	}
+	var and = true
+	var val float64
+	for arg := argsList.Front(); arg != nil; arg = arg.Next() {
+		token := arg.Value.(formulaArg)
+		switch token.Type {
+		case ArgUnknown:
+			continue
+		case ArgString:
+			if token.String == "TRUE" {
+				continue
+			}
+			if token.String == "FALSE" {
+				result = token.String
+				return
+			}
+			if val, err = strconv.ParseFloat(token.String, 64); err != nil {
+				err = errors.New(formulaErrorVALUE)
+				return
+			}
+			and = and && (val != 0)
+		case ArgMatrix:
+			// TODO
+			err = errors.New(formulaErrorVALUE)
+			return
+		}
+	}
+	result = strings.ToUpper(strconv.FormatBool(and))
+	return
+}
+
+// OR function tests a number of supplied conditions and returns either TRUE
+// or FALSE.
+func (fn *formulaFuncs) OR(argsList *list.List) (result string, err error) {
+	if argsList.Len() == 0 {
+		err = errors.New("OR requires at least 1 argument")
+		return
+	}
+	if argsList.Len() > 30 {
+		err = errors.New("OR accepts at most 30 arguments")
+		return
+	}
+	var or bool
+	var val float64
+	for arg := argsList.Front(); arg != nil; arg = arg.Next() {
+		token := arg.Value.(formulaArg)
+		switch token.Type {
+		case ArgUnknown:
+			continue
+		case ArgString:
+			if token.String == "FALSE" {
+				continue
+			}
+			if token.String == "TRUE" {
+				or = true
+				continue
+			}
+			if val, err = strconv.ParseFloat(token.String, 64); err != nil {
+				err = errors.New(formulaErrorVALUE)
+				return
+			}
+			or = val != 0
+		case ArgMatrix:
+			// TODO
+			err = errors.New(formulaErrorVALUE)
+			return
+		}
+	}
+	result = strings.ToUpper(strconv.FormatBool(or))
+	return
+}
+
+// Date and Time Functions
+
+// DATE returns a date, from a user-supplied year, month and day.
+func (fn *formulaFuncs) DATE(argsList *list.List) (result string, err error) {
+	if argsList.Len() != 3 {
+		err = errors.New("DATE requires 3 number arguments")
+		return
+	}
+	var year, month, day int
+	if year, err = strconv.Atoi(argsList.Front().Value.(formulaArg).String); err != nil {
+		err = errors.New("DATE requires 3 number arguments")
+		return
+	}
+	if month, err = strconv.Atoi(argsList.Front().Next().Value.(formulaArg).String); err != nil {
+		err = errors.New("DATE requires 3 number arguments")
+		return
+	}
+	if day, err = strconv.Atoi(argsList.Back().Value.(formulaArg).String); err != nil {
+		err = errors.New("DATE requires 3 number arguments")
+		return
+	}
+	d := makeDate(year, time.Month(month), day)
+	result = timeFromExcelTime(daysBetween(excelMinTime1900.Unix(), d)+1, false).String()
+	return
+}
+
+// makeDate return date as a Unix time, the number of seconds elapsed since
+// January 1, 1970 UTC.
+func makeDate(y int, m time.Month, d int) int64 {
+	if y == 1900 && int(m) <= 2 {
+		d--
+	}
+	date := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	return date.Unix()
+}
+
+// daysBetween return time interval of the given start timestamp and end
+// timestamp.
+func daysBetween(startDate, endDate int64) float64 {
+	return float64(int(0.5 + float64((endDate-startDate)/86400)))
 }

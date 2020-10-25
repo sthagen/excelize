@@ -770,12 +770,10 @@ func (f *File) drawChartSeriesSpPr(i int, formatSet *formatChart) *cSpPr {
 		Ln: &aLn{
 			W:   f.ptToEMUs(formatSet.Series[i].Line.Width),
 			Cap: "rnd", // rnd, sq, flat
+			SolidFill: &aSolidFill{
+				SchemeClr: &aSchemeClr{Val: "accent" + strconv.Itoa((formatSet.order+i)%6+1)},
+			},
 		},
-	}
-	if i+formatSet.order < 6 {
-		spPrLine.Ln.SolidFill = &aSolidFill{
-			SchemeClr: &aSchemeClr{Val: "accent" + strconv.Itoa(i+formatSet.order+1)},
-		}
 	}
 	chartSeriesSpPr := map[string]*cSpPr{Line: spPrLine, Scatter: spPrScatter}
 	return chartSeriesSpPr[formatSet.Type]
@@ -1180,7 +1178,7 @@ func (f *File) addDrawingChart(sheet, drawingXML, cell string, width, height, rI
 
 	width = int(float64(width) * formatSet.XScale)
 	height = int(float64(height) * formatSet.YScale)
-	colStart, rowStart, _, _, colEnd, rowEnd, x2, y2 :=
+	colStart, rowStart, colEnd, rowEnd, x2, y2 :=
 		f.positionObjectPixels(sheet, colIdx, rowIdx, formatSet.OffsetX, formatSet.OffsetY, width, height)
 	content, cNvPrID := f.drawingParser(drawingXML)
 	twoCellAnchor := xdrCellAnchor{}

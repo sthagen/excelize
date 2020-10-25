@@ -31,14 +31,15 @@ import (
 	"github.com/mohae/deepcopy"
 )
 
-// NewSheet provides function to create a new sheet by given worksheet name.
-// When creating a new spreadsheet file, the default worksheet will be
-// created. Returns the number of sheets in the workbook (file) after
-// appending the new sheet.
+// NewSheet provides the function to create a new sheet by given a worksheet
+// name and returns the index of the sheets in the workbook
+// (spreadsheet) after it appended. Note that when creating a new spreadsheet
+// file, the default worksheet named `Sheet1` will be created.
 func (f *File) NewSheet(name string) int {
 	// Check if the worksheet already exists
-	if f.GetSheetIndex(name) != -1 {
-		return f.SheetCount
+	index := f.GetSheetIndex(name)
+	if index != -1 {
+		return index
 	}
 	f.DeleteSheet(name)
 	f.SheetCount++
@@ -308,6 +309,9 @@ func (f *File) getActiveSheetID() int {
 func (f *File) SetSheetName(oldName, newName string) {
 	oldName = trimSheetName(oldName)
 	newName = trimSheetName(newName)
+	if newName == oldName {
+		return
+	}
 	content := f.workbookReader()
 	for k, v := range content.Sheets.Sheet {
 		if v.Name == oldName {
@@ -360,8 +364,8 @@ func (f *File) getSheetID(name string) int {
 }
 
 // GetSheetIndex provides a function to get a sheet index of the workbook by
-// the given sheet name. If the given sheet name is invalid, it will return an
-// integer type value 0.
+// the given sheet name. If the given sheet name is invalid or sheet doesn't
+// exist, it will return an integer type value -1.
 func (f *File) GetSheetIndex(name string) int {
 	var idx = -1
 	for index, sheet := range f.GetSheetList() {

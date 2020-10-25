@@ -1,7 +1,9 @@
 package excelize
 
 import (
+	"container/list"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,6 +33,18 @@ func TestCalcCellValue(t *testing.T) {
 	}
 
 	mathCalc := map[string]string{
+		"=2^3":  "8",
+		"=1=1":  "TRUE",
+		"=1=2":  "FALSE",
+		"=1<2":  "TRUE",
+		"=3<2":  "FALSE",
+		"=2<=3": "TRUE",
+		"=2<=1": "FALSE",
+		"=2>1":  "TRUE",
+		"=2>3":  "FALSE",
+		"=2>=1": "TRUE",
+		"=2>=3": "FALSE",
+		"=1&2":  "12",
 		// ABS
 		"=ABS(-1)":    "1",
 		"=ABS(-6.5)":  "6.5",
@@ -339,7 +353,8 @@ func TestCalcCellValue(t *testing.T) {
 		"=SINH(0.5)": "0.5210953054937474",
 		"=SINH(-2)":  "-3.626860407847019",
 		// SQRT
-		"=SQRT(4)": "2",
+		"=SQRT(4)":  "2",
+		`=SQRT("")`: "0",
 		// SQRTPI
 		"=SQRTPI(5)":   "3.963327297606011",
 		"=SQRTPI(0.2)": "0.7926654595212022",
@@ -361,7 +376,15 @@ func TestCalcCellValue(t *testing.T) {
 		"=1+SUM(SUM(1,2*3),4)*-4/2+5+(4+2)*3": "2",
 		"=1+SUM(SUM(1,2*3),4)*4/3+5+(4+2)*3":  "38.666666666666664",
 		// SUMIF
+		`=SUMIF(F1:F5, "")`:             "0",
+		`=SUMIF(A1:A5, "3")`:            "3",
+		`=SUMIF(F1:F5, "=36693")`:       "36693",
+		`=SUMIF(F1:F5, "<100")`:         "0",
+		`=SUMIF(F1:F5, "<=36693")`:      "93233",
 		`=SUMIF(F1:F5, ">100")`:         "146554",
+		`=SUMIF(F1:F5, ">=100")`:        "146554",
+		`=SUMIF(F1:F5, ">=text")`:       "0",
+		`=SUMIF(F1:F5, "*Jan",F2:F5)`:   "0",
 		`=SUMIF(D3:D7,"Jan",F2:F5)`:     "112114",
 		`=SUMIF(D2:D9,"Feb",F2:F9)`:     "157559",
 		`=SUMIF(E2:E9,"North 1",F2:F9)`: "66582",
@@ -384,14 +407,14 @@ func TestCalcCellValue(t *testing.T) {
 		"=TRUNC(99.999,-1)":  "90",
 		"=TRUNC(-99.999,2)":  "-99.99",
 		"=TRUNC(-99.999,-1)": "-90",
-		// Statistical functions
+		// Statistical Functions
 		// COUNTA
 		`=COUNTA()`:                       "0",
 		`=COUNTA(A1:A5,B2:B5,"text",1,2)`: "8",
 		// MEDIAN
 		"=MEDIAN(A1:A5,12)": "2",
 		"=MEDIAN(A1:A5)":    "1.5",
-		// Information functions
+		// Information Functions
 		// ISBLANK
 		"=ISBLANK(A1)": "FALSE",
 		"=ISBLANK(A5)": "TRUE",
@@ -420,6 +443,25 @@ func TestCalcCellValue(t *testing.T) {
 		"=ISODD(A2)": "FALSE",
 		// NA
 		"=NA()": "#N/A",
+		// Logical Functions
+		// AND
+		"=AND(0)":               "FALSE",
+		"=AND(1)":               "TRUE",
+		"=AND(1,0)":             "FALSE",
+		"=AND(0,1)":             "FALSE",
+		"=AND(1=1)":             "TRUE",
+		"=AND(1<2)":             "TRUE",
+		"=AND(1>2,2<3,2>0,3>1)": "FALSE",
+		"=AND(1=1),1=1":         "TRUE",
+		// OR
+		"=OR(1)":       "TRUE",
+		"=OR(0)":       "FALSE",
+		"=OR(1=2,2=2)": "TRUE",
+		"=OR(1=2,2=3)": "FALSE",
+		// Date and Time Functions
+		// DATE
+		"=DATE(2020,10,21)": "2020-10-21 00:00:00 +0000 UTC",
+		"=DATE(1900,1,1)":   "1899-12-31 00:00:00 +0000 UTC",
 	}
 	for formula, expected := range mathCalc {
 		f := prepareData()
@@ -695,10 +737,10 @@ func TestCalcCellValue(t *testing.T) {
 		"=TRUNC()":      "TRUNC requires at least 1 argument",
 		`=TRUNC("X")`:   "#VALUE!",
 		`=TRUNC(1,"X")`: "#VALUE!",
-		// Statistical functions
+		// Statistical Functions
 		// MEDIAN
 		"=MEDIAN()": "MEDIAN requires at least 1 argument",
-		// Information functions
+		// Information Functions
 		// ISBLANK
 		"=ISBLANK(A1,A2)": "ISBLANK requires 1 argument",
 		// ISERR
@@ -706,7 +748,8 @@ func TestCalcCellValue(t *testing.T) {
 		// ISERROR
 		"=ISERROR()": "ISERROR requires 1 argument",
 		// ISEVEN
-		"=ISEVEN()": "ISEVEN requires 1 argument",
+		"=ISEVEN()":       "ISEVEN requires 1 argument",
+		`=ISEVEN("text")`: "#VALUE!",
 		// ISNA
 		"=ISNA()": "ISNA requires 1 argument",
 		// ISNONTEXT
@@ -714,9 +757,27 @@ func TestCalcCellValue(t *testing.T) {
 		// ISNUMBER
 		"=ISNUMBER()": "ISNUMBER requires 1 argument",
 		// ISODD
-		"=ISODD()": "ISODD requires 1 argument",
+		"=ISODD()":       "ISODD requires 1 argument",
+		`=ISODD("text")`: "#VALUE!",
 		// NA
 		"=NA(1)": "NA accepts no arguments",
+		// Logical Functions
+		// AND
+		`=AND("text")`: "#VALUE!",
+		`=AND(A1:B1)`:  "#VALUE!",
+		"=AND()":       "AND requires at least 1 argument",
+		"=AND(1" + strings.Repeat(",1", 30) + ")": "AND accepts at most 30 arguments",
+		// OR
+		`=OR("text")`:                            "#VALUE!",
+		`=OR(A1:B1)`:                             "#VALUE!",
+		"=OR()":                                  "OR requires at least 1 argument",
+		"=OR(1" + strings.Repeat(",1", 30) + ")": "OR accepts at most 30 arguments",
+		// Date and Time Functions
+		// DATE
+		"=DATE()":               "DATE requires 3 number arguments",
+		`=DATE("text",10,21)`:   "DATE requires 3 number arguments",
+		`=DATE(2020,"text",21)`: "DATE requires 3 number arguments",
+		`=DATE(2020,10,"text")`: "DATE requires 3 number arguments",
 	}
 	for formula, expected := range mathCalcError {
 		f := prepareData()
@@ -816,4 +877,70 @@ func TestCalcCellValueWithDefinedName(t *testing.T) {
 	assert.NoError(t, err)
 	// DefinedName with scope WorkSheet takes precedence over DefinedName with scope Workbook, so we should get B1 value
 	assert.Equal(t, "B1 value", result, "=defined_name1")
+}
+
+func TestCalcPow(t *testing.T) {
+	err := `strconv.ParseFloat: parsing "text": invalid syntax`
+	assert.EqualError(t, calcPow("1", "text", nil), err)
+	assert.EqualError(t, calcPow("text", "1", nil), err)
+	assert.EqualError(t, calcL("1", "text", nil), err)
+	assert.EqualError(t, calcL("text", "1", nil), err)
+	assert.EqualError(t, calcLe("1", "text", nil), err)
+	assert.EqualError(t, calcLe("text", "1", nil), err)
+	assert.EqualError(t, calcG("1", "text", nil), err)
+	assert.EqualError(t, calcG("text", "1", nil), err)
+	assert.EqualError(t, calcGe("1", "text", nil), err)
+	assert.EqualError(t, calcGe("text", "1", nil), err)
+	assert.EqualError(t, calcAdd("1", "text", nil), err)
+	assert.EqualError(t, calcAdd("text", "1", nil), err)
+	assert.EqualError(t, calcAdd("1", "text", nil), err)
+	assert.EqualError(t, calcAdd("text", "1", nil), err)
+	assert.EqualError(t, calcSubtract("1", "text", nil), err)
+	assert.EqualError(t, calcSubtract("text", "1", nil), err)
+	assert.EqualError(t, calcMultiply("1", "text", nil), err)
+	assert.EqualError(t, calcMultiply("text", "1", nil), err)
+	assert.EqualError(t, calcDiv("1", "text", nil), err)
+	assert.EqualError(t, calcDiv("text", "1", nil), err)
+}
+
+func TestISBLANK(t *testing.T) {
+	argsList := list.New()
+	argsList.PushBack(formulaArg{
+		Type: ArgUnknown,
+	})
+	fn := formulaFuncs{}
+	result, err := fn.ISBLANK(argsList)
+	assert.Equal(t, result, "TRUE")
+	assert.NoError(t, err)
+}
+
+func TestAND(t *testing.T) {
+	argsList := list.New()
+	argsList.PushBack(formulaArg{
+		Type: ArgUnknown,
+	})
+	fn := formulaFuncs{}
+	result, err := fn.AND(argsList)
+	assert.Equal(t, result, "TRUE")
+	assert.NoError(t, err)
+}
+
+func TestOR(t *testing.T) {
+	argsList := list.New()
+	argsList.PushBack(formulaArg{
+		Type: ArgUnknown,
+	})
+	fn := formulaFuncs{}
+	result, err := fn.OR(argsList)
+	assert.Equal(t, result, "FALSE")
+	assert.NoError(t, err)
+}
+
+func TestDet(t *testing.T) {
+	assert.Equal(t, det([][]float64{
+		{1, 2, 3, 4},
+		{2, 3, 4, 5},
+		{3, 4, 5, 6},
+		{4, 5, 6, 7},
+	}), float64(0))
 }

@@ -32,9 +32,11 @@ import (
 // File define a populated spreadsheet file struct.
 type File struct {
 	sync.Mutex
+	options          *Options
 	xmlAttr          map[string][]xml.Attr
 	checked          map[string]bool
 	sheetMap         map[string]string
+	streams          map[string]*StreamWriter
 	CalcChain        *xlsxCalcChain
 	Comments         map[string]*xlsxComments
 	ContentTypes     *xlsxTypes
@@ -69,17 +71,15 @@ type Options struct {
 //        return
 //    }
 //
+// Note that the excelize just support decrypt and not support encrypt currently, the spreadsheet
+// saved by Save and SaveAs will be without password unprotected.
 func OpenFile(filename string, opt ...Options) (*File, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-	var option Options
-	for _, o := range opt {
-		option = o
-	}
-	f, err := OpenReader(file, option)
+	f, err := OpenReader(file, opt...)
 	if err != nil {
 		return nil, err
 	}
@@ -111,12 +111,12 @@ func OpenReader(r io.Reader, opt ...Options) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
+	f := newFile()
 	if bytes.Contains(b, oleIdentifier) {
-		var option Options
 		for _, o := range opt {
-			option = o
+			f.options = &o
 		}
-		b, err = Decrypt(b, &option)
+		b, err = Decrypt(b, f.options)
 		if err != nil {
 			return nil, fmt.Errorf("decrypted file failed")
 		}
@@ -130,7 +130,6 @@ func OpenReader(r io.Reader, opt ...Options) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := newFile()
 	f.SheetCount, f.XLSX = sheetCount, file
 	f.CalcChain = f.calcChainReader()
 	f.sheetMap = f.getSheetMap()
@@ -160,7 +159,7 @@ func (f *File) setDefaultTimeStyle(sheet, axis string, format int) error {
 	}
 	if s == 0 {
 		style, _ := f.NewStyle(&Style{NumFmt: format})
-		_ = f.SetCellStyle(sheet, axis, axis, style)
+		err = f.SetCellStyle(sheet, axis, axis, style)
 	}
 	return err
 }

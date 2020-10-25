@@ -64,8 +64,8 @@ func (f *File) Save() error {
 
 // SaveAs provides a function to create or update to an xlsx file at the
 // provided path.
-func (f *File) SaveAs(name string) error {
-	if len(name) > FileNameLength {
+func (f *File) SaveAs(name string, opt ...Options) error {
+	if len(name) > MaxFileNameLength {
 		return errors.New("file name length exceeds maximum limit")
 	}
 	file, err := os.OpenFile(name, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0666)
@@ -73,6 +73,10 @@ func (f *File) SaveAs(name string) error {
 		return err
 	}
 	defer file.Close()
+	f.options = nil
+	for _, o := range opt {
+		f.options = &o
+	}
 	return f.Write(file)
 }
 
@@ -106,6 +110,26 @@ func (f *File) WriteToBuffer() (*bytes.Buffer, error) {
 	f.sharedStringsWriter()
 	f.styleSheetWriter()
 
+	for path, stream := range f.streams {
+		fi, err := zw.Create(path)
+		if err != nil {
+			zw.Close()
+			return buf, err
+		}
+		var from io.Reader
+		from, err = stream.rawData.Reader()
+		if err != nil {
+			stream.rawData.Close()
+			return buf, err
+		}
+		_, err = io.Copy(fi, from)
+		if err != nil {
+			zw.Close()
+			return buf, err
+		}
+		stream.rawData.Close()
+	}
+
 	for path, content := range f.XLSX {
 		fi, err := zw.Create(path)
 		if err != nil {
@@ -117,6 +141,19 @@ func (f *File) WriteToBuffer() (*bytes.Buffer, error) {
 			zw.Close()
 			return buf, err
 		}
+	}
+
+	if f.options != nil && f.options.Password != "" {
+		if err := zw.Close(); err != nil {
+			return buf, err
+		}
+		b, err := Encrypt(buf.Bytes(), f.options)
+		if err != nil {
+			return buf, err
+		}
+		buf.Reset()
+		buf.Write(b)
+		return buf, nil
 	}
 	return buf, zw.Close()
 }
