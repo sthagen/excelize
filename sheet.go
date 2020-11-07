@@ -22,6 +22,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -57,9 +58,9 @@ func (f *File) NewSheet(name string) int {
 	f.setContentTypes("/xl/worksheets/sheet"+strconv.Itoa(sheetID)+".xml", ContentTypeSpreadSheetMLWorksheet)
 	// Create new sheet /xl/worksheets/sheet%d.xml
 	f.setSheet(sheetID, name)
-	// Update xl/_rels/workbook.xml.rels
-	rID := f.addRels("xl/_rels/workbook.xml.rels", SourceRelationshipWorkSheet, fmt.Sprintf("worksheets/sheet%d.xml", sheetID), "")
-	// Update xl/workbook.xml
+	// Update workbook.xml.rels
+	rID := f.addRels(f.getWorkbookRelsPath(), SourceRelationshipWorkSheet, fmt.Sprintf("/xl/worksheets/sheet%d.xml", sheetID), "")
+	// Update workbook.xml
 	f.setWorkbook(name, sheetID, rID)
 	return f.GetSheetIndex(name)
 }
@@ -89,18 +90,46 @@ func (f *File) contentTypesWriter() {
 	}
 }
 
-// workbookReader provides a function to get the pointer to the xl/workbook.xml
+// getWorkbookPath provides a function to get the path of the workbook.xml in
+// the spreadsheet.
+func (f *File) getWorkbookPath() (path string) {
+	if rels := f.relsReader("_rels/.rels"); rels != nil {
+		for _, rel := range rels.Relationships {
+			if rel.Type == SourceRelationshipOfficeDocument {
+				path = strings.TrimPrefix(rel.Target, "/")
+				return
+			}
+		}
+	}
+	return
+}
+
+// getWorkbookRelsPath provides a function to get the path of the workbook.xml.rels
+// in the spreadsheet.
+func (f *File) getWorkbookRelsPath() (path string) {
+	wbPath := f.getWorkbookPath()
+	wbDir := filepath.Dir(wbPath)
+	if wbDir == "." {
+		path = "_rels/" + filepath.Base(wbPath) + ".rels"
+		return
+	}
+	path = strings.TrimPrefix(filepath.Dir(wbPath)+"/_rels/"+filepath.Base(wbPath)+".rels", "/")
+	return
+}
+
+// workbookReader provides a function to get the pointer to the workbook.xml
 // structure after deserialization.
 func (f *File) workbookReader() *xlsxWorkbook {
 	var err error
 	if f.WorkBook == nil {
+		wbPath := f.getWorkbookPath()
 		f.WorkBook = new(xlsxWorkbook)
-		if _, ok := f.xmlAttr["xl/workbook.xml"]; !ok {
-			d := f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML("xl/workbook.xml"))))
-			f.xmlAttr["xl/workbook.xml"] = append(f.xmlAttr["xl/workbook.xml"], getRootElement(d)...)
-			f.addNameSpaces("xl/workbook.xml", SourceRelationship)
+		if _, ok := f.xmlAttr[wbPath]; !ok {
+			d := f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML(wbPath))))
+			f.xmlAttr[wbPath] = append(f.xmlAttr[wbPath], getRootElement(d)...)
+			f.addNameSpaces(wbPath, SourceRelationship)
 		}
-		if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML("xl/workbook.xml")))).
+		if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML(wbPath)))).
 			Decode(f.WorkBook); err != nil && err != io.EOF {
 			log.Printf("xml decode error: %s", err)
 		}
@@ -108,30 +137,35 @@ func (f *File) workbookReader() *xlsxWorkbook {
 	return f.WorkBook
 }
 
-// workBookWriter provides a function to save xl/workbook.xml after serialize
+// workBookWriter provides a function to save workbook.xml after serialize
 // structure.
 func (f *File) workBookWriter() {
 	if f.WorkBook != nil {
 		output, _ := xml.Marshal(f.WorkBook)
-		f.saveFileList("xl/workbook.xml", replaceRelationshipsBytes(f.replaceNameSpaceBytes("xl/workbook.xml", output)))
+		f.saveFileList(f.getWorkbookPath(), replaceRelationshipsBytes(f.replaceNameSpaceBytes(f.getWorkbookPath(), output)))
 	}
 }
 
 // workSheetWriter provides a function to save xl/worksheets/sheet%d.xml after
 // serialize structure.
 func (f *File) workSheetWriter() {
+	var arr []byte
+	buffer := bytes.NewBuffer(arr)
+	encoder := xml.NewEncoder(buffer)
 	for p, sheet := range f.Sheet {
 		if sheet != nil {
 			for k, v := range sheet.SheetData.Row {
 				f.Sheet[p].SheetData.Row[k].C = trimCell(v.C)
 			}
-			output, _ := xml.Marshal(sheet)
-			f.saveFileList(p, replaceRelationshipsBytes(f.replaceNameSpaceBytes(p, output)))
+			// reusing buffer
+			_ = encoder.Encode(sheet)
+			f.saveFileList(p, replaceRelationshipsBytes(f.replaceNameSpaceBytes(p, buffer.Bytes())))
 			ok := f.checked[p]
 			if ok {
 				delete(f.Sheet, p)
 				f.checked[p] = false
 			}
+			buffer.Reset()
 		}
 	}
 }
@@ -411,10 +445,10 @@ func (f *File) GetSheetList() (list []string) {
 }
 
 // getSheetMap provides a function to get worksheet name and XML file path map
-// of XLSX.
+// of the spreadsheet.
 func (f *File) getSheetMap() map[string]string {
 	content := f.workbookReader()
-	rels := f.relsReader("xl/_rels/workbook.xml.rels")
+	rels := f.relsReader(f.getWorkbookRelsPath())
 	maps := map[string]string{}
 	for _, v := range content.Sheets.Sheet {
 		for _, rel := range rels.Relationships {
@@ -464,7 +498,7 @@ func (f *File) DeleteSheet(name string) {
 	}
 	sheetName := trimSheetName(name)
 	wb := f.workbookReader()
-	wbRels := f.relsReader("xl/_rels/workbook.xml.rels")
+	wbRels := f.relsReader(f.getWorkbookRelsPath())
 	for idx, sheet := range wb.Sheets.Sheet {
 		if sheet.Name == sheetName {
 			wb.Sheets.Sheet = append(wb.Sheets.Sheet[:idx], wb.Sheets.Sheet[idx+1:]...)
@@ -503,10 +537,9 @@ func (f *File) DeleteSheet(name string) {
 }
 
 // deleteSheetFromWorkbookRels provides a function to remove worksheet
-// relationships by given relationships ID in the file
-// xl/_rels/workbook.xml.rels.
+// relationships by given relationships ID in the file workbook.xml.rels.
 func (f *File) deleteSheetFromWorkbookRels(rID string) string {
-	content := f.relsReader("xl/_rels/workbook.xml.rels")
+	content := f.relsReader(f.getWorkbookRelsPath())
 	for k, v := range content.Relationships {
 		if v.ID == rID {
 			content.Relationships = append(content.Relationships[:k], content.Relationships[k+1:]...)

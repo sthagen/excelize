@@ -3,6 +3,7 @@ package excelize
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -343,4 +344,50 @@ func TestSetSheetName(t *testing.T) {
 	// Test set workksheet with the same name.
 	f.SetSheetName("Sheet1", "Sheet1")
 	assert.Equal(t, "Sheet1", f.GetSheetName(0))
+}
+
+func TestGetWorkbookPath(t *testing.T) {
+	f := NewFile()
+	delete(f.XLSX, "_rels/.rels")
+	assert.Equal(t, "", f.getWorkbookPath())
+}
+
+func TestGetWorkbookRelsPath(t *testing.T) {
+	f := NewFile()
+	delete(f.XLSX, "xl/_rels/.rels")
+	f.XLSX["_rels/.rels"] = []byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument" Target="/workbook.xml"/></Relationships>`)
+	assert.Equal(t, "_rels/workbook.xml.rels", f.getWorkbookRelsPath())
+}
+
+func BenchmarkNewSheet(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			newSheetWithSet()
+		}
+	})
+}
+func newSheetWithSet() {
+	file := NewFile()
+	file.NewSheet("sheet1")
+	for i := 0; i < 1000; i++ {
+		file.SetCellInt("sheet1", "A"+strconv.Itoa(i+1), i)
+	}
+	file = nil
+}
+
+func BenchmarkFile_SaveAs(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			newSheetWithSave()
+		}
+
+	})
+}
+func newSheetWithSave() {
+	file := NewFile()
+	file.NewSheet("sheet1")
+	for i := 0; i < 1000; i++ {
+		file.SetCellInt("sheet1", "A"+strconv.Itoa(i+1), i)
+	}
+	file.Save()
 }

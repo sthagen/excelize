@@ -288,9 +288,9 @@ func (f *File) GetRowHeight(sheet string, row int) (float64, error) {
 // after deserialization of xl/sharedStrings.xml.
 func (f *File) sharedStringsReader() *xlsxSST {
 	var err error
-
 	f.Lock()
 	defer f.Unlock()
+	relPath := f.getWorkbookRelsPath()
 	if f.SharedStrings == nil {
 		var sharedStrings xlsxSST
 		ss := f.readXML("xl/sharedStrings.xml")
@@ -308,14 +308,14 @@ func (f *File) sharedStringsReader() *xlsxSST {
 			}
 		}
 		f.addContentTypePart(0, "sharedStrings")
-		rels := f.relsReader("xl/_rels/workbook.xml.rels")
+		rels := f.relsReader(relPath)
 		for _, rel := range rels.Relationships {
-			if rel.Target == "sharedStrings.xml" {
+			if rel.Target == "/xl/sharedStrings.xml" {
 				return f.SharedStrings
 			}
 		}
-		// Update xl/_rels/workbook.xml.rels
-		f.addRels("xl/_rels/workbook.xml.rels", SourceRelationshipSharedStrings, "sharedStrings.xml", "")
+		// Update workbook.xml.rels
+		f.addRels(relPath, SourceRelationshipSharedStrings, "/xl/sharedStrings.xml", "")
 	}
 
 	return f.SharedStrings

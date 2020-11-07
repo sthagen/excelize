@@ -21,6 +21,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestCurrency(t *testing.T) {
+	f, err := OpenFile(filepath.Join("test", "Book1.xlsx"))
+	assert.NoError(t, err)
+	// f.NewSheet("Sheet3")
+	go f.SetCellValue("Sheet1", "A1", "value")
+	go f.SetCellValue("Sheet2", "A1", "value")
+}
+
 func TestOpenFile(t *testing.T) {
 	// Test update the spreadsheet file.
 	f, err := OpenFile(filepath.Join("test", "Book1.xlsx"))
@@ -201,7 +209,7 @@ func TestCharsetTranscoder(t *testing.T) {
 func TestOpenReader(t *testing.T) {
 	_, err := OpenReader(strings.NewReader(""))
 	assert.EqualError(t, err, "zip: not a valid zip file")
-	_, err = OpenReader(bytes.NewReader(oleIdentifier))
+	_, err = OpenReader(bytes.NewReader(oleIdentifier), Options{Password: "password"})
 	assert.EqualError(t, err, "decrypted file failed")
 
 	// Test open password protected spreadsheet created by Microsoft Office Excel 2010.

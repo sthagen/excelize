@@ -112,7 +112,7 @@ func OpenReader(r io.Reader, opt ...Options) (*File, error) {
 		return nil, err
 	}
 	f := newFile()
-	if bytes.Contains(b, oleIdentifier) {
+	if bytes.Contains(b, oleIdentifier) && len(opt) > 0 {
 		for _, o := range opt {
 			f.options = &o
 		}
@@ -345,7 +345,7 @@ func (f *File) AddVBAProject(bin string) error {
 		return errors.New("unsupported VBA project extension")
 	}
 	f.setContentTypePartVBAProjectExtensions()
-	wb := f.relsReader("xl/_rels/workbook.xml.rels")
+	wb := f.relsReader(f.getWorkbookRelsPath())
 	var rID int
 	var ok bool
 	for _, rel := range wb.Relationships {

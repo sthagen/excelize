@@ -138,7 +138,7 @@ func (f *File) AddPivotTable(opt *PivotTableOption) error {
 	}
 
 	// workbook pivot cache
-	workBookPivotCacheRID := f.addRels("xl/_rels/workbook.xml.rels", SourceRelationshipPivotCache, fmt.Sprintf("pivotCache/pivotCacheDefinition%d.xml", pivotCacheID), "")
+	workBookPivotCacheRID := f.addRels(f.getWorkbookRelsPath(), SourceRelationshipPivotCache, fmt.Sprintf("/xl/pivotCache/pivotCacheDefinition%d.xml", pivotCacheID), "")
 	cacheID := f.addWorkbookPivotCache(workBookPivotCacheRID)
 
 	pivotCacheRels := "xl/pivotTables/_rels/pivotTable" + strconv.Itoa(pivotTableID) + ".xml.rels"
@@ -661,7 +661,7 @@ func (f *File) getPivotTableFieldNameDefaultSubtotal(name string, fields []Pivot
 	return false, false
 }
 
-// addWorkbookPivotCache add the association ID of the pivot cache in xl/workbook.xml.
+// addWorkbookPivotCache add the association ID of the pivot cache in workbook.xml.
 func (f *File) addWorkbookPivotCache(RID int) int {
 	wb := f.workbookReader()
 	if wb.PivotCaches == nil {

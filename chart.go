@@ -800,9 +800,9 @@ func (f *File) AddChartSheet(sheet, format string, combo ...string) error {
 	f.addContentTypePart(chartID, "chart")
 	f.addContentTypePart(sheetID, "chartsheet")
 	f.addContentTypePart(drawingID, "drawings")
-	// Update xl/_rels/workbook.xml.rels
-	rID := f.addRels("xl/_rels/workbook.xml.rels", SourceRelationshipChartsheet, fmt.Sprintf("chartsheets/sheet%d.xml", sheetID), "")
-	// Update xl/workbook.xml
+	// Update workbook.xml.rels
+	rID := f.addRels(f.getWorkbookRelsPath(), SourceRelationshipChartsheet, fmt.Sprintf("/xl/chartsheets/sheet%d.xml", sheetID), "")
+	// Update workbook.xml
 	f.setWorkbook(sheet, sheetID, rID)
 	chartsheet, _ := xml.Marshal(cs)
 	f.addSheetNameSpace(sheet, NameSpaceSpreadSheet)
