@@ -124,8 +124,9 @@ func TestSetCellValues(t *testing.T) {
 	err = f.SetCellValue("Sheet1", "A1", time.Date(1600, time.December, 31, 0, 0, 0, 0, time.UTC))
 	assert.NoError(t, err)
 
-	_, err = f.GetCellValue("Sheet1", "A1")
-	assert.EqualError(t, err, `strconv.ParseFloat: parsing "1600-12-31T00:00:00Z": invalid syntax`)
+	v, err = f.GetCellValue("Sheet1", "A1")
+	assert.NoError(t, err)
+	assert.Equal(t, v, "1600-12-31T00:00:00Z")
 }
 
 func TestSetCellBool(t *testing.T) {
@@ -331,7 +332,7 @@ func TestFormattedValue2(t *testing.T) {
 	f.Styles.CellXfs.Xf = append(f.Styles.CellXfs.Xf, xlsxXf{
 		NumFmtID: nil,
 	})
-	v = f.formattedValue(3, "43528")
+	_ = f.formattedValue(3, "43528")
 
 	// formatted value with empty number format
 	f.Styles.NumFmts = nil

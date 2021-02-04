@@ -345,11 +345,9 @@ func (c *xlsxC) getValueFrom(f *File, d *xlsxSST) (string, error) {
 		}
 		return f.formattedValue(c.S, c.V), nil
 	default:
-		if len(c.V) > 16 {
-			val, err := roundPrecision(c.V)
-			if err != nil {
-				return "", err
-			}
+		isNum, precision := isNumeric(c.V)
+		if isNum && precision > 15 {
+			val, _ := roundPrecision(c.V)
 			if val != c.V {
 				return f.formattedValue(c.S, val), nil
 			}
@@ -602,7 +600,6 @@ func (f *File) duplicateMergeCells(sheet string, ws *xlsxWorksheet, row, row2 in
 			if err := f.MergeCell(sheet, from, to); err != nil {
 				return err
 			}
-			i++
 		}
 	}
 	return nil

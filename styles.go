@@ -1,4 +1,4 @@
-// Copyright 2016 - 2020 The excelize Authors. All rights reserved. Use of
+// Copyright 2016 - 2021 The excelize Authors. All rights reserved. Use of
 // this source code is governed by a BSD-style license that can be found in
 // the LICENSE file.
 //
@@ -2410,8 +2410,6 @@ func newFills(style *Style, fg bool) *xlsxFill {
 			gradient.Left = 0.5
 			gradient.Right = 0.5
 			gradient.Top = 0.5
-		default:
-			break
 		}
 		var stops []*xlsxGradientFillStop
 		for index, color := range style.Fill.Color {
@@ -2432,8 +2430,14 @@ func newFills(style *Style, fg bool) *xlsxFill {
 		var pattern xlsxPatternFill
 		pattern.PatternType = patterns[style.Fill.Pattern]
 		if fg {
+			if pattern.FgColor == nil {
+				pattern.FgColor = new(xlsxColor)
+			}
 			pattern.FgColor.RGB = getPaletteColor(style.Fill.Color[0])
 		} else {
+			if pattern.BgColor == nil {
+				pattern.BgColor = new(xlsxColor)
+			}
 			pattern.BgColor.RGB = getPaletteColor(style.Fill.Color[0])
 		}
 		fill.PatternFill = &pattern

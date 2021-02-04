@@ -1,4 +1,4 @@
-// Copyright 2016 - 2020 The excelize Authors. All rights reserved. Use of
+// Copyright 2016 - 2021 The excelize Authors. All rights reserved. Use of
 // this source code is governed by a BSD-style license that can be found in
 // the LICENSE file.
 //
@@ -500,6 +500,22 @@ func (f *File) DeleteSheet(name string) {
 	wb := f.workbookReader()
 	wbRels := f.relsReader(f.getWorkbookRelsPath())
 	activeSheetName := f.GetSheetName(f.GetActiveSheetIndex())
+	deleteSheetID := f.getSheetID(name)
+	// Delete and adjust defined names
+	if wb.DefinedNames != nil {
+		for idx := 0; idx < len(wb.DefinedNames.DefinedName); idx++ {
+			dn := wb.DefinedNames.DefinedName[idx]
+			if dn.LocalSheetID != nil {
+				sheetID := *dn.LocalSheetID + 1
+				if sheetID == deleteSheetID {
+					wb.DefinedNames.DefinedName = append(wb.DefinedNames.DefinedName[:idx], wb.DefinedNames.DefinedName[idx+1:]...)
+					idx--
+				} else if sheetID > deleteSheetID {
+					wb.DefinedNames.DefinedName[idx].LocalSheetID = intPtr(*dn.LocalSheetID - 1)
+				}
+			}
+		}
+	}
 	for idx, sheet := range wb.Sheets.Sheet {
 		if sheet.Name == sheetName {
 			wb.Sheets.Sheet = append(wb.Sheets.Sheet[:idx], wb.Sheets.Sheet[idx+1:]...)
@@ -517,7 +533,7 @@ func (f *File) DeleteSheet(name string) {
 			}
 			target := f.deleteSheetFromWorkbookRels(sheet.ID)
 			f.deleteSheetFromContentTypes(target)
-			f.deleteCalcChain(sheet.SheetID, "") // Delete CalcChain
+			f.deleteCalcChain(sheet.SheetID, "")
 			delete(f.sheetMap, sheetName)
 			delete(f.XLSX, sheetXML)
 			delete(f.XLSX, rels)
@@ -1135,15 +1151,24 @@ type PageLayoutOptionPtr interface {
 }
 
 type (
+	// BlackAndWhite specified print black and white.
+	BlackAndWhite bool
+	// FirstPageNumber specified the first printed page number. If no value is
+	// specified, then 'automatic' is assumed.
+	FirstPageNumber uint
 	// PageLayoutOrientation defines the orientation of page layout for a
 	// worksheet.
 	PageLayoutOrientation string
-	// PageLayoutPaperSize defines the paper size of the worksheet
+	// PageLayoutPaperSize defines the paper size of the worksheet.
 	PageLayoutPaperSize int
-	// FitToHeight specified number of vertical pages to fit on
+	// FitToHeight specified the number of vertical pages to fit on.
 	FitToHeight int
-	// FitToWidth specified number of horizontal pages to fit on
+	// FitToWidth specified the number of horizontal pages to fit on.
 	FitToWidth int
+	// PageLayoutScale defines the print scaling. This attribute is restricted
+	// to values ranging from 10 (10%) to 400 (400%). This setting is
+	// overridden when fitToWidth and/or fitToHeight are in use.
+	PageLayoutScale uint
 )
 
 const (
@@ -1152,6 +1177,41 @@ const (
 	// OrientationLandscape indicates page layout orientation id landscape.
 	OrientationLandscape = "landscape"
 )
+
+// setPageLayout provides a method to set the print black and white for the
+// worksheet.
+func (p BlackAndWhite) setPageLayout(ps *xlsxPageSetUp) {
+	ps.BlackAndWhite = bool(p)
+}
+
+// getPageLayout provides a method to get the print black and white for the
+// worksheet.
+func (p *BlackAndWhite) getPageLayout(ps *xlsxPageSetUp) {
+	if ps == nil {
+		*p = false
+		return
+	}
+	*p = BlackAndWhite(ps.BlackAndWhite)
+}
+
+// setPageLayout provides a method to set the first printed page number for
+// the worksheet.
+func (p FirstPageNumber) setPageLayout(ps *xlsxPageSetUp) {
+	if 0 < uint(p) {
+		ps.FirstPageNumber = uint(p)
+		ps.UseFirstPageNumber = true
+	}
+}
+
+// getPageLayout provides a method to get the first printed page number for
+// the worksheet.
+func (p *FirstPageNumber) getPageLayout(ps *xlsxPageSetUp) {
+	if ps == nil || ps.FirstPageNumber == 0 || !ps.UseFirstPageNumber {
+		*p = 1
+		return
+	}
+	*p = FirstPageNumber(ps.FirstPageNumber)
+}
 
 // setPageLayout provides a method to set the orientation for the worksheet.
 func (o PageLayoutOrientation) setPageLayout(ps *xlsxPageSetUp) {
@@ -1215,11 +1275,33 @@ func (p *FitToWidth) getPageLayout(ps *xlsxPageSetUp) {
 	*p = FitToWidth(ps.FitToWidth)
 }
 
+// setPageLayout provides a method to set the scale for the worksheet.
+func (p PageLayoutScale) setPageLayout(ps *xlsxPageSetUp) {
+	if 10 <= uint(p) && uint(p) <= 400 {
+		ps.Scale = uint(p)
+	}
+}
+
+// getPageLayout provides a method to get the scale for the worksheet.
+func (p *PageLayoutScale) getPageLayout(ps *xlsxPageSetUp) {
+	if ps == nil || ps.Scale < 10 || ps.Scale > 400 {
+		*p = 100
+		return
+	}
+	*p = PageLayoutScale(ps.Scale)
+}
+
 // SetPageLayout provides a function to sets worksheet page layout.
 //
 // Available options:
-//   PageLayoutOrientation(string)
-//   PageLayoutPaperSize(int)
+//
+//    BlackAndWhite(bool)
+//    FirstPageNumber(uint)
+//    PageLayoutOrientation(string)
+//    PageLayoutPaperSize(int)
+//    FitToHeight(int)
+//    FitToWidth(int)
+//    PageLayoutScale(uint)
 //
 // The following shows the paper size sorted by excelize index number:
 //

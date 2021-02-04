@@ -13,18 +13,15 @@ import (
 
 func ExampleFile_SetPageLayout() {
 	f := NewFile()
-
 	if err := f.SetPageLayout(
 		"Sheet1",
+		BlackAndWhite(true),
+		FirstPageNumber(2),
 		PageLayoutOrientation(OrientationLandscape),
-	); err != nil {
-		fmt.Println(err)
-	}
-	if err := f.SetPageLayout(
-		"Sheet1",
 		PageLayoutPaperSize(10),
 		FitToHeight(2),
 		FitToWidth(2),
+		PageLayoutScale(50),
 	); err != nil {
 		fmt.Println(err)
 	}
@@ -34,11 +31,20 @@ func ExampleFile_SetPageLayout() {
 func ExampleFile_GetPageLayout() {
 	f := NewFile()
 	var (
-		orientation PageLayoutOrientation
-		paperSize   PageLayoutPaperSize
-		fitToHeight FitToHeight
-		fitToWidth  FitToWidth
+		blackAndWhite   BlackAndWhite
+		firstPageNumber FirstPageNumber
+		orientation     PageLayoutOrientation
+		paperSize       PageLayoutPaperSize
+		fitToHeight     FitToHeight
+		fitToWidth      FitToWidth
+		scale           PageLayoutScale
 	)
+	if err := f.GetPageLayout("Sheet1", &blackAndWhite); err != nil {
+		fmt.Println(err)
+	}
+	if err := f.GetPageLayout("Sheet1", &firstPageNumber); err != nil {
+		fmt.Println(err)
+	}
 	if err := f.GetPageLayout("Sheet1", &orientation); err != nil {
 		fmt.Println(err)
 	}
@@ -48,21 +54,29 @@ func ExampleFile_GetPageLayout() {
 	if err := f.GetPageLayout("Sheet1", &fitToHeight); err != nil {
 		fmt.Println(err)
 	}
-
 	if err := f.GetPageLayout("Sheet1", &fitToWidth); err != nil {
 		fmt.Println(err)
 	}
+	if err := f.GetPageLayout("Sheet1", &scale); err != nil {
+		fmt.Println(err)
+	}
 	fmt.Println("Defaults:")
+	fmt.Printf("- print black and white: %t\n", blackAndWhite)
+	fmt.Printf("- page number for first printed page: %d\n", firstPageNumber)
 	fmt.Printf("- orientation: %q\n", orientation)
 	fmt.Printf("- paper size: %d\n", paperSize)
 	fmt.Printf("- fit to height: %d\n", fitToHeight)
 	fmt.Printf("- fit to width: %d\n", fitToWidth)
+	fmt.Printf("- scale: %d\n", scale)
 	// Output:
 	// Defaults:
+	// - print black and white: false
+	// - page number for first printed page: 1
 	// - orientation: "portrait"
 	// - paper size: 1
 	// - fit to height: 1
 	// - fit to width: 1
+	// - scale: 100
 }
 
 func TestNewSheet(t *testing.T) {
@@ -97,10 +111,13 @@ func TestPageLayoutOption(t *testing.T) {
 		container  PageLayoutOptionPtr
 		nonDefault PageLayoutOption
 	}{
+		{new(BlackAndWhite), BlackAndWhite(true)},
+		{new(FirstPageNumber), FirstPageNumber(2)},
 		{new(PageLayoutOrientation), PageLayoutOrientation(OrientationLandscape)},
 		{new(PageLayoutPaperSize), PageLayoutPaperSize(10)},
 		{new(FitToHeight), FitToHeight(2)},
 		{new(FitToWidth), FitToWidth(2)},
+		{new(PageLayoutScale), PageLayoutScale(50)},
 	}
 
 	for i, test := range testData {
@@ -366,6 +383,19 @@ func TestDeleteSheet(t *testing.T) {
 	f.DeleteSheet("Sheet1")
 	assert.Equal(t, "Sheet2", f.GetSheetName(f.GetActiveSheetIndex()))
 	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestDeleteSheet.xlsx")))
+	// Test with auto filter defined names
+	f = NewFile()
+	f.NewSheet("Sheet2")
+	f.NewSheet("Sheet3")
+	assert.NoError(t, f.SetCellValue("Sheet1", "A1", "A"))
+	assert.NoError(t, f.SetCellValue("Sheet2", "A1", "A"))
+	assert.NoError(t, f.SetCellValue("Sheet3", "A1", "A"))
+	assert.NoError(t, f.AutoFilter("Sheet1", "A1", "A1", ""))
+	assert.NoError(t, f.AutoFilter("Sheet2", "A1", "A1", ""))
+	assert.NoError(t, f.AutoFilter("Sheet3", "A1", "A1", ""))
+	f.DeleteSheet("Sheet2")
+	f.DeleteSheet("Sheet1")
+	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestDeleteSheet2.xlsx")))
 }
 
 func BenchmarkNewSheet(b *testing.B) {

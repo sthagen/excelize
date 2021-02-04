@@ -138,25 +138,25 @@ type aSchemeClr struct {
 }
 
 // attrValInt directly maps the val element with integer data type as an
-// attribute。
+// attribute.
 type attrValInt struct {
 	Val *int `xml:"val,attr"`
 }
 
 // attrValFloat directly maps the val element with float64 data type as an
-// attribute。
+// attribute.
 type attrValFloat struct {
 	Val *float64 `xml:"val,attr"`
 }
 
 // attrValBool directly maps the val element with boolean data type as an
-// attribute。
+// attribute.
 type attrValBool struct {
 	Val *bool `xml:"val,attr"`
 }
 
 // attrValString directly maps the val element with string data type as an
-// attribute。
+// attribute.
 type attrValString struct {
 	Val *string `xml:"val,attr"`
 }
@@ -623,7 +623,7 @@ type formatChartSeries struct {
 		Width float64 `json:"width"`
 	} `json:"line"`
 	Marker struct {
-		Type   string  `json:"type"`
+		Symbol string  `json:"symbol"`
 		Size   int     `json:"size"`
 		Width  float64 `json:"width"`
 		Border struct {
