@@ -46,6 +46,10 @@ func TestRows(t *testing.T) {
 	f.XLSX["xl/worksheets/sheet1.xml"] = []byte(`<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>1</v></c></row><row r="A"><c r="2" t="str"><v>B</v></c></row></sheetData></worksheet>`)
 	_, err = f.Rows("Sheet1")
 	assert.EqualError(t, err, `strconv.Atoi: parsing "A": invalid syntax`)
+
+	f.XLSX["xl/worksheets/sheet1.xml"] = nil
+	_, err = f.Rows("Sheet1")
+	assert.NoError(t, err)
 }
 
 func TestRowsIterator(t *testing.T) {
@@ -121,6 +125,18 @@ func TestRowHeight(t *testing.T) {
 	assert.EqualError(t, f.SetRowHeight("SheetN", 1, 111.0), "sheet SheetN is not exist")
 	_, err = f.GetRowHeight("SheetN", 3)
 	assert.EqualError(t, err, "sheet SheetN is not exist")
+
+	// Test get row height with custom default row height.
+	assert.NoError(t, f.SetSheetFormatPr(sheet1,
+		DefaultRowHeight(30.0),
+		CustomHeight(true),
+	))
+	height, err = f.GetRowHeight(sheet1, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, 30.0, height)
+
+	// Test set row height with custom default row height with prepare XML.
+	assert.NoError(t, f.SetCellValue(sheet1, "A10", "A10"))
 
 	err = f.SaveAs(filepath.Join("test", "TestRowHeight.xlsx"))
 	if !assert.NoError(t, err) {

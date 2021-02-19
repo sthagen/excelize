@@ -447,17 +447,17 @@ func (f *File) GetSheetList() (list []string) {
 // getSheetMap provides a function to get worksheet name and XML file path map
 // of the spreadsheet.
 func (f *File) getSheetMap() map[string]string {
-	content := f.workbookReader()
-	rels := f.relsReader(f.getWorkbookRelsPath())
 	maps := map[string]string{}
-	for _, v := range content.Sheets.Sheet {
-		for _, rel := range rels.Relationships {
+	for _, v := range f.workbookReader().Sheets.Sheet {
+		for _, rel := range f.relsReader(f.getWorkbookRelsPath()).Relationships {
 			if rel.ID == v.ID {
-				// Construct a target XML as xl/worksheets/sheet%d by split path, compatible with different types of relative paths in workbook.xml.rels, for example: worksheets/sheet%d.xml and /xl/worksheets/sheet%d.xml
-				pathInfo := strings.Split(rel.Target, "/")
-				pathInfoLen := len(pathInfo)
-				if pathInfoLen > 1 {
-					maps[v.Name] = fmt.Sprintf("xl/%s", strings.Join(pathInfo[pathInfoLen-2:], "/"))
+				// Construct a target XML as xl/worksheets/sheet%d by split
+				// path, compatible with different types of relative paths in
+				// workbook.xml.rels, for example: worksheets/sheet%d.xml
+				// and /xl/worksheets/sheet%d.xml
+				path := filepath.ToSlash(strings.TrimPrefix(filepath.Clean(fmt.Sprintf("%s/%s", filepath.Dir(f.getWorkbookPath()), rel.Target)), "/"))
+				if _, ok := f.XLSX[path]; ok {
+					maps[v.Name] = path
 				}
 			}
 		}
@@ -610,8 +610,8 @@ func (f *File) copySheet(from, to int) error {
 	if ok {
 		f.XLSX[toRels] = f.XLSX[fromRels]
 	}
-	fromSheetXMLPath, _ := f.sheetMap[trimSheetName(fromSheet)]
-	fromSheetAttr, _ := f.xmlAttr[fromSheetXMLPath]
+	fromSheetXMLPath := f.sheetMap[trimSheetName(fromSheet)]
+	fromSheetAttr := f.xmlAttr[fromSheetXMLPath]
 	f.xmlAttr[path] = fromSheetAttr
 	return err
 }
@@ -860,18 +860,18 @@ func (f *File) searchSheet(name, value string, regSearch bool) (result []string,
 			}
 			break
 		}
-		switch startElement := token.(type) {
+		switch xmlElement := token.(type) {
 		case xml.StartElement:
-			inElement = startElement.Name.Local
+			inElement = xmlElement.Name.Local
 			if inElement == "row" {
-				row, err = attrValToInt("r", startElement.Attr)
+				row, err = attrValToInt("r", xmlElement.Attr)
 				if err != nil {
 					return
 				}
 			}
 			if inElement == "c" {
 				colCell := xlsxC{}
-				_ = decoder.DecodeElement(&colCell, &startElement)
+				_ = decoder.DecodeElement(&colCell, &xmlElement)
 				val, _ := colCell.getValueFrom(f, d)
 				if regSearch {
 					regex := regexp.MustCompile(value)
@@ -1745,7 +1745,7 @@ func prepareSheetXML(ws *xlsxWorksheet, col int, row int) {
 	sizeHint := 0
 	var ht float64
 	var customHeight bool
-	if ws.SheetFormatPr != nil {
+	if ws.SheetFormatPr != nil && ws.SheetFormatPr.CustomHeight {
 		ht = ws.SheetFormatPr.DefaultRowHeight
 		customHeight = true
 	}
