@@ -494,6 +494,54 @@ func (f *File) SetCellHyperLink(sheet, axis, link, linkType string) error {
 	return nil
 }
 
+// GetCellRichText provides a function to get rich text of cell by given
+// worksheet.
+func (f *File) GetCellRichText(sheet, cell string) (runs []RichTextRun, err error) {
+	ws, err := f.workSheetReader(sheet)
+	if err != nil {
+		return
+	}
+	cellData, _, _, err := f.prepareCell(ws, sheet, cell)
+	if err != nil {
+		return
+	}
+	siIdx, err := strconv.Atoi(cellData.V)
+	if nil != err {
+		return
+	}
+	sst := f.sharedStringsReader()
+	if len(sst.SI) <= siIdx || siIdx < 0 {
+		return
+	}
+	si := sst.SI[siIdx]
+	for _, v := range si.R {
+		run := RichTextRun{
+			Text: v.T.Val,
+		}
+		if nil != v.RPr {
+			font := Font{}
+			font.Bold = v.RPr.B != nil
+			font.Italic = v.RPr.I != nil
+			if v.RPr.U != nil && v.RPr.U.Val != nil {
+				font.Underline = *v.RPr.U.Val
+			}
+			if v.RPr.RFont != nil && v.RPr.RFont.Val != nil {
+				font.Family = *v.RPr.RFont.Val
+			}
+			if v.RPr.Sz != nil && v.RPr.Sz.Val != nil {
+				font.Size = *v.RPr.Sz.Val
+			}
+			font.Strike = v.RPr.Strike != nil
+			if nil != v.RPr.Color {
+				font.Color = strings.TrimPrefix(v.RPr.Color.RGB, "FF")
+			}
+			run.Font = &font
+		}
+		runs = append(runs, run)
+	}
+	return
+}
+
 // SetCellRichText provides a function to set cell with rich text by given
 // worksheet. For example, set rich text on the A1 cell of the worksheet named
 // Sheet1:
@@ -619,14 +667,15 @@ func (f *File) SetCellRichText(sheet, cell string, runs []RichTextRun) error {
 		fnt := textRun.Font
 		if fnt != nil {
 			rpr := xlsxRPr{}
+			trueVal := ""
 			if fnt.Bold {
-				rpr.B = " "
+				rpr.B = &trueVal
 			}
 			if fnt.Italic {
-				rpr.I = " "
+				rpr.I = &trueVal
 			}
 			if fnt.Strike {
-				rpr.Strike = " "
+				rpr.Strike = &trueVal
 			}
 			if fnt.Underline != "" {
 				rpr.U = &attrValString{Val: &fnt.Underline}
