@@ -326,6 +326,13 @@ func TestSetCellHyperLink(t *testing.T) {
 	assert.NoError(t, f.SetCellHyperLink("Sheet2", "C1", "https://github.com/360EntSecGroup-Skylar/excelize", "External"))
 	// Test add Location hyperlink in a work sheet.
 	assert.NoError(t, f.SetCellHyperLink("Sheet2", "D6", "Sheet1!D8", "Location"))
+	// Test add Location hyperlink with display & tooltip in a work sheet.
+	display := "Display value"
+	tooltip := "Hover text"
+	assert.NoError(t, f.SetCellHyperLink("Sheet2", "D7", "Sheet1!D9", "Location", HyperlinkOpts{
+		Display: &display,
+		Tooltip: &tooltip,
+	}))
 
 	assert.EqualError(t, f.SetCellHyperLink("Sheet2", "C3", "Sheet1!D8", ""), `invalid link type ""`)
 
@@ -1188,7 +1195,7 @@ func TestAddVBAProject(t *testing.T) {
 }
 
 func TestContentTypesReader(t *testing.T) {
-	// Test unsupport charset.
+	// Test unsupported charset.
 	f := NewFile()
 	f.ContentTypes = nil
 	f.XLSX["[Content_Types].xml"] = MacintoshCyrillicCharset
@@ -1196,7 +1203,7 @@ func TestContentTypesReader(t *testing.T) {
 }
 
 func TestWorkbookReader(t *testing.T) {
-	// Test unsupport charset.
+	// Test unsupported charset.
 	f := NewFile()
 	f.WorkBook = nil
 	f.XLSX["xl/workbook.xml"] = MacintoshCyrillicCharset
@@ -1204,7 +1211,7 @@ func TestWorkbookReader(t *testing.T) {
 }
 
 func TestWorkSheetReader(t *testing.T) {
-	// Test unsupport charset.
+	// Test unsupported charset.
 	f := NewFile()
 	delete(f.Sheet, "xl/worksheets/sheet1.xml")
 	f.XLSX["xl/worksheets/sheet1.xml"] = MacintoshCyrillicCharset
@@ -1221,7 +1228,7 @@ func TestWorkSheetReader(t *testing.T) {
 }
 
 func TestRelsReader(t *testing.T) {
-	// Test unsupport charset.
+	// Test unsupported charset.
 	f := NewFile()
 	rels := "xl/_rels/workbook.xml.rels"
 	f.Relationships[rels] = nil

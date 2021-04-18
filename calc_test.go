@@ -47,6 +47,11 @@ func TestCalcCellValue(t *testing.T) {
 		"=2>=3": "FALSE",
 		"=1&2":  "12",
 		// Engineering Functions
+		// BESSELI
+		"=BESSELI(4.5,1)": "15.389222753735925",
+		"=BESSELI(32,1)":  "5.502845511211247e+12",
+		// BESSELJ
+		"=BESSELJ(1.9,2)": "0.329925727692387",
 		// BIN2DEC
 		"=BIN2DEC(\"10\")":         "2",
 		"=BIN2DEC(\"11\")":         "3",
@@ -78,6 +83,16 @@ func TestCalcCellValue(t *testing.T) {
 		// BITXOR
 		"=BITXOR(5,6)":  "3",
 		"=BITXOR(9,12)": "5",
+		// COMPLEX
+		"=COMPLEX(5,2)":         "5+2i",
+		"=COMPLEX(5,-9)":        "5-9i",
+		"=COMPLEX(-1,2,\"j\")":  "-1+2j",
+		"=COMPLEX(10,-5,\"i\")": "10-5i",
+		"=COMPLEX(0,5)":         "5i",
+		"=COMPLEX(3,0)":         "3",
+		"=COMPLEX(0,-2)":        "-2i",
+		"=COMPLEX(0,0)":         "0",
+		"=COMPLEX(0,-1,\"j\")":  "-j",
 		// DEC2BIN
 		"=DEC2BIN(2)":    "10",
 		"=DEC2BIN(3)":    "11",
@@ -115,6 +130,109 @@ func TestCalcCellValue(t *testing.T) {
 		"=HEX2OCT(\"8\",10)":       "0000000010",
 		"=HEX2OCT(\"FFFFFFFFF8\")": "7777777770",
 		"=HEX2OCT(\"1F3\")":        "763",
+		// IMABS
+		"=IMABS(\"2j\")":              "2",
+		"=IMABS(\"-1+2i\")":           "2.23606797749979",
+		"=IMABS(COMPLEX(-1,2,\"j\"))": "2.23606797749979",
+		// IMAGINARY
+		"=IMAGINARY(\"5+2i\")": "2",
+		"=IMAGINARY(\"2-i\")":  "-1",
+		"=IMAGINARY(6)":        "0",
+		"=IMAGINARY(\"3i\")":   "3",
+		"=IMAGINARY(\"4+i\")":  "1",
+		// IMARGUMENT
+		"=IMARGUMENT(\"5+2i\")": "0.380506377112365",
+		"=IMARGUMENT(\"2-i\")":  "-0.463647609000806",
+		"=IMARGUMENT(6)":        "0",
+		// IMCONJUGATE
+		"=IMCONJUGATE(\"5+2i\")": "5-2i",
+		"=IMCONJUGATE(\"2-i\")":  "2+i",
+		"=IMCONJUGATE(6)":        "6",
+		"=IMCONJUGATE(\"3i\")":   "-3i",
+		"=IMCONJUGATE(\"4+i\")":  "4-i",
+		// IMCOS
+		"=IMCOS(0)":          "1",
+		"=IMCOS(0.5)":        "0.877582561890373",
+		"=IMCOS(\"3+0.5i\")": "-1.1163412445261518-0.0735369737112366i",
+		// IMCOSH
+		"=IMCOSH(0.5)":           "1.127625965206381",
+		"=IMCOSH(\"3+0.5i\")":    "8.835204606500994+4.802825082743033i",
+		"=IMCOSH(\"2-i\")":       "2.0327230070196656-3.0518977991518i",
+		"=IMCOSH(COMPLEX(1,-1))": "0.8337300251311491-0.9888977057628651i",
+		// IMCOT
+		"=IMCOT(0.5)":           "1.830487721712452",
+		"=IMCOT(\"3+0.5i\")":    "-0.4793455787473728-2.016092521506228i",
+		"=IMCOT(\"2-i\")":       "-0.171383612909185+0.8213297974938518i",
+		"=IMCOT(COMPLEX(1,-1))": "0.21762156185440268+0.868014142895925i",
+		// IMCSC
+		"=IMCSC(\"j\")": "-0.8509181282393216i",
+		// IMCSCH
+		"=IMCSCH(COMPLEX(1,-1))": "0.30393100162842646+0.6215180171704284i",
+		// IMDIV
+		"=IMDIV(\"5+2i\",\"1+i\")":          "3.5-1.5i",
+		"=IMDIV(\"2+2i\",\"2+i\")":          "1.2+0.4i",
+		"=IMDIV(COMPLEX(5,2),COMPLEX(0,1))": "2-5i",
+		// IMEXP
+		"=IMEXP(0)":             "1",
+		"=IMEXP(0.5)":           "1.648721270700128",
+		"=IMEXP(\"1-2i\")":      "-1.1312043837568135-2.4717266720048183i",
+		"=IMEXP(COMPLEX(1,-1))": "1.4686939399158851-2.2873552871788423i",
+		// IMLN
+		"=IMLN(0.5)":           "-0.693147180559945",
+		"=IMLN(\"3+0.5i\")":    "1.1123117757621668+0.16514867741462683i",
+		"=IMLN(\"2-i\")":       "0.8047189562170503-0.4636476090008061i",
+		"=IMLN(COMPLEX(1,-1))": "0.3465735902799727-0.7853981633974483i",
+		// IMLOG10
+		"=IMLOG10(0.5)":           "-0.301029995663981",
+		"=IMLOG10(\"3+0.5i\")":    "0.48307086636951624+0.07172315929479262i",
+		"=IMLOG10(\"2-i\")":       "0.34948500216800943-0.20135959813668655i",
+		"=IMLOG10(COMPLEX(1,-1))": "0.1505149978319906-0.3410940884604603i",
+		// IMREAL
+		"=IMREAL(\"5+2i\")":     "5",
+		"=IMREAL(\"2+2i\")":     "2",
+		"=IMREAL(6)":            "6",
+		"=IMREAL(\"3i\")":       "0",
+		"=IMREAL(COMPLEX(4,1))": "4",
+		// IMSEC
+		"=IMSEC(0.5)":           "1.139493927324549",
+		"=IMSEC(\"3+0.5i\")":    "-0.8919131797403304+0.05875317818173977i",
+		"=IMSEC(\"2-i\")":       "-0.4131493442669401-0.687527438655479i",
+		"=IMSEC(COMPLEX(1,-1))": "0.49833703055518686-0.5910838417210451i",
+		// IMSECH
+		"=IMSECH(0.5)":           "0.886818883970074",
+		"=IMSECH(\"3+0.5i\")":    "0.08736657796213027-0.047492549490160664i",
+		"=IMSECH(\"2-i\")":       "0.1511762982655772+0.22697367539372157i",
+		"=IMSECH(COMPLEX(1,-1))": "0.49833703055518686+0.5910838417210451i",
+		// IMSIN
+		"=IMSIN(0.5)":           "0.479425538604203",
+		"=IMSIN(\"3+0.5i\")":    "0.15913058529843999-0.5158804424525267i",
+		"=IMSIN(\"2-i\")":       "1.4031192506220405+0.4890562590412937i",
+		"=IMSIN(COMPLEX(1,-1))": "1.2984575814159773-0.6349639147847361i",
+		// IMSINH
+		"=IMSINH(-0)":            "0",
+		"=IMSINH(0.5)":           "0.521095305493747",
+		"=IMSINH(\"3+0.5i\")":    "8.791512343493714+4.82669427481082i",
+		"=IMSINH(\"2-i\")":       "1.9596010414216063-3.165778513216168i",
+		"=IMSINH(COMPLEX(1,-1))": "0.6349639147847361-1.2984575814159773i",
+		// IMSQRT
+		"=IMSQRT(\"i\")":     "0.7071067811865476+0.7071067811865476i",
+		"=IMSQRT(\"2-i\")":   "1.455346690225355-0.34356074972251244i",
+		"=IMSQRT(\"5+2i\")":  "2.27872385417085+0.4388421169022545i",
+		"=IMSQRT(6)":         "2.449489742783178",
+		"=IMSQRT(\"-2-4i\")": "1.1117859405028423-1.7989074399478673i",
+		// IMSUB
+		"=IMSUB(\"5+i\",\"1+4i\")":          "4-3i",
+		"=IMSUB(\"9+2i\",6)":                "3+2i",
+		"=IMSUB(COMPLEX(5,2),COMPLEX(0,1))": "5+i",
+		// IMSUM
+		"=IMSUM(\"1-i\",\"5+10i\",2)":       "8+9i",
+		"=IMSUM(COMPLEX(5,2),COMPLEX(0,1))": "5+3i",
+		// IMTAN
+		"=IMTAN(-0)":            "0",
+		"=IMTAN(0.5)":           "0.546302489843791",
+		"=IMTAN(\"3+0.5i\")":    "-0.11162105077158344+0.46946999342588536i",
+		"=IMTAN(\"2-i\")":       "-0.24345820118572523-1.16673625724092i",
+		"=IMTAN(COMPLEX(1,-1))": "0.2717525853195117-1.0839233273386948i",
 		// OCT2BIN
 		"=OCT2BIN(\"5\")":          "101",
 		"=OCT2BIN(\"0000000001\")": "1",
@@ -161,10 +279,11 @@ func TestCalcCellValue(t *testing.T) {
 		"=_xlfn.ACOTH(2)":       "0.549306144334055",
 		"=_xlfn.ACOTH(ABS(-2))": "0.549306144334055",
 		// ARABIC
-		`=_xlfn.ARABIC("IV")`:   "4",
-		`=_xlfn.ARABIC("-IV")`:  "-4",
-		`=_xlfn.ARABIC("MCXX")`: "1120",
-		`=_xlfn.ARABIC("")`:     "0",
+		"=_xlfn.ARABIC(\"IV\")":       "4",
+		"=_xlfn.ARABIC(\"-IV\")":      "-4",
+		"=_xlfn.ARABIC(\"MCXX\")":     "1120",
+		"=_xlfn.ARABIC(\"\")":         "0",
+		"=_xlfn.ARABIC(\" ll  lc \")": "-50",
 		// ASIN
 		"=ASIN(-1)":      "-1.570796326794897",
 		"=ASIN(0)":       "0",
@@ -382,6 +501,23 @@ func TestCalcCellValue(t *testing.T) {
 		"=LOG10(0.001)":      "-3",
 		"=LOG10(25)":         "1.397940008672038",
 		"=LOG10(LOG10(100))": "0.301029995663981",
+		// IMLOG2
+		"=IMLOG2(\"5+2i\")": "2.4289904975637864+0.5489546632866347i",
+		"=IMLOG2(\"2-i\")":  "1.1609640474436813-0.6689021062254881i",
+		"=IMLOG2(6)":        "2.584962500721156",
+		"=IMLOG2(\"3i\")":   "1.584962500721156+2.266180070913597i",
+		"=IMLOG2(\"4+i\")":  "2.04373142062517+0.3534295024167349i",
+		// IMPOWER
+		"=IMPOWER(\"2-i\",2)":   "3.000000000000001-4i",
+		"=IMPOWER(\"2-i\",3)":   "2.0000000000000018-11.000000000000002i",
+		"=IMPOWER(9,0.5)":       "3",
+		"=IMPOWER(\"2+4i\",-2)": "-0.029999999999999985-0.039999999999999994i",
+		// IMPRODUCT
+		"=IMPRODUCT(3,6)":                       "18",
+		`=IMPRODUCT("",3,SUM(6))`:               "18",
+		"=IMPRODUCT(\"1-i\",\"5+10i\",2)":       "30+10i",
+		"=IMPRODUCT(COMPLEX(5,2),COMPLEX(0,1))": "-2+5i",
+		"=IMPRODUCT(A1:C1)":                     "4",
 		// MOD
 		"=MOD(6,4)":        "2",
 		"=MOD(6,3)":        "0",
@@ -508,10 +644,18 @@ func TestCalcCellValue(t *testing.T) {
 		"=STDEV(MUNIT(2))":      "0.577350269189626",
 		"=STDEV(0,INT(0))":      "0",
 		"=STDEV(INT(1),INT(1))": "0",
+		// STDEV.S
+		"=STDEV.S(F2:F9)": "10724.978287523809",
 		// STDEVA
 		"=STDEVA(F2:F9)":    "10724.978287523809",
 		"=STDEVA(MUNIT(2))": "0.577350269189626",
 		"=STDEVA(0,INT(0))": "0",
+		// POISSON.DIST
+		"=POISSON.DIST(20,25,FALSE)": "0.051917468608491",
+		"=POISSON.DIST(35,40,TRUE)":  "0.242414197690103",
+		// POISSON
+		"=POISSON(20,25,FALSE)": "0.051917468608491",
+		"=POISSON(35,40,TRUE)":  "0.242414197690103",
 		// SUM
 		"=SUM(1,2)":                           "3",
 		`=SUM("",1,2)`:                        "3",
@@ -604,10 +748,39 @@ func TestCalcCellValue(t *testing.T) {
 		// GAMMALN
 		"=GAMMALN(4.5)":    "2.453736570842443",
 		"=GAMMALN(INT(1))": "0",
+		// HARMEAN
+		"=HARMEAN(2.5,3,0.5,1,3)":               "1.229508196721312",
+		"=HARMEAN(\"2.5\",3,0.5,1,INT(3),\"\")": "1.229508196721312",
 		// KURT
 		"=KURT(F1:F9)":           "-1.033503502551368",
 		"=KURT(F1,F2:F9)":        "-1.033503502551368",
 		"=KURT(INT(1),MUNIT(2))": "-3.333333333333336",
+		// NORM.DIST
+		"=NORM.DIST(0.8,1,0.3,TRUE)": "0.252492537546923",
+		"=NORM.DIST(50,40,20,FALSE)": "0.017603266338215",
+		// NORMDIST
+		"=NORMDIST(0.8,1,0.3,TRUE)": "0.252492537546923",
+		"=NORMDIST(50,40,20,FALSE)": "0.017603266338215",
+		// NORM.INV
+		"=NORM.INV(0.6,5,2)": "5.506694205719997",
+		// NORMINV
+		"=NORMINV(0.6,5,2)":     "5.506694205719997",
+		"=NORMINV(0.99,40,1.5)": "43.489521811582044",
+		"=NORMINV(0.02,40,1.5)": "36.91937663649545",
+		// NORM.S.DIST
+		"=NORM.S.DIST(0.8,TRUE)": "0.788144601416603",
+		// NORMSDIST
+		"=NORMSDIST(1.333333)": "0.908788725604095",
+		"=NORMSDIST(0)":        "0.5",
+		// NORM.S.INV
+		"=NORM.S.INV(0.25)": "-0.674489750223423",
+		// NORMSINV
+		"=NORMSINV(0.25)": "-0.674489750223423",
+		// LARGE
+		"=LARGE(A1:A5,1)": "3",
+		"=LARGE(A1:B5,2)": "4",
+		"=LARGE(A1,1)":    "1",
+		"=LARGE(A1:F2,1)": "36693",
 		// MAX
 		"=MAX(1)":          "1",
 		"=MAX(TRUE())":     "1",
@@ -642,10 +815,35 @@ func TestCalcCellValue(t *testing.T) {
 		"=MINA(MUNIT(2))":    "0",
 		"=MINA(INT(1))":      "1",
 		"=MINA(A1:B4,MUNIT(1),INT(0),1,E1:F2,\"\")": "0",
+		// PERCENTILE.INC
+		"=PERCENTILE.INC(A1:A4,0.2)": "0.6",
+		// PERCENTILE
+		"=PERCENTILE(A1:A4,0.2)": "0.6",
+		"=PERCENTILE(0,0)":       "0",
 		// PERMUT
 		"=PERMUT(6,6)":  "720",
 		"=PERMUT(7,6)":  "5040",
 		"=PERMUT(10,6)": "151200",
+		// PERMUTATIONA
+		"=PERMUTATIONA(6,6)": "46656",
+		"=PERMUTATIONA(7,6)": "117649",
+		// QUARTILE
+		"=QUARTILE(A1:A4,2)": "1.5",
+		// QUARTILE.INC
+		"=QUARTILE.INC(A1:A4,0)": "0",
+		// SKEW
+		"=SKEW(1,2,3,4,3)": "-0.404796008910937",
+		"=SKEW(A1:B2)":     "0",
+		"=SKEW(A1:D3)":     "0",
+		// SMALL
+		"=SMALL(A1:A5,1)": "0",
+		"=SMALL(A1:B5,2)": "1",
+		"=SMALL(A1,1)":    "1",
+		"=SMALL(A1:F2,1)": "1",
+		// VARP
+		"=VARP(A1:A5)": "1.25",
+		// VAR.P
+		"=VAR.P(A1:A5)": "1.25",
 		// Information Functions
 		// ISBLANK
 		"=ISBLANK(A1)": "FALSE",
@@ -677,8 +875,17 @@ func TestCalcCellValue(t *testing.T) {
 		// ISTEXT
 		"=ISTEXT(D1)": "TRUE",
 		"=ISTEXT(A1)": "FALSE",
+		// N
+		"=N(10)":     "10",
+		"=N(\"10\")": "10",
+		"=N(\"x\")":  "0",
+		"=N(TRUE)":   "1",
+		"=N(FALSE)":  "0",
 		// SHEET
-		"SHEET()": "1",
+		"=SHEET()": "1",
+		// T
+		"=T(\"text\")": "text",
+		"=T(N(10))":    "",
 		// Logical Functions
 		// AND
 		"=AND(0)":               "FALSE",
@@ -711,6 +918,20 @@ func TestCalcCellValue(t *testing.T) {
 		// DATE
 		"=DATE(2020,10,21)": "2020-10-21 00:00:00 +0000 UTC",
 		"=DATE(1900,1,1)":   "1899-12-31 00:00:00 +0000 UTC",
+		// DATEDIF
+		"=DATEDIF(43101,43101,\"D\")":  "0",
+		"=DATEDIF(43101,43891,\"d\")":  "790",
+		"=DATEDIF(43101,43891,\"Y\")":  "2",
+		"=DATEDIF(42156,44242,\"y\")":  "5",
+		"=DATEDIF(43101,43891,\"M\")":  "26",
+		"=DATEDIF(42171,44242,\"m\")":  "67",
+		"=DATEDIF(42156,44454,\"MD\")": "14",
+		"=DATEDIF(42171,44242,\"md\")": "30",
+		"=DATEDIF(43101,43891,\"YM\")": "2",
+		"=DATEDIF(42171,44242,\"ym\")": "7",
+		"=DATEDIF(43101,43891,\"YD\")": "59",
+		"=DATEDIF(36526,73110,\"YD\")": "60",
+		"=DATEDIF(42171,44242,\"yd\")": "244",
 		// Text Functions
 		// CHAR
 		"=CHAR(65)": "A",
@@ -734,6 +955,15 @@ func TestCalcCellValue(t *testing.T) {
 		"=EXACT(1,\"1\")":     "TRUE",
 		"=EXACT(1,1)":         "TRUE",
 		"=EXACT(\"A\",\"a\")": "FALSE",
+		// FIXED
+		"=FIXED(5123.591)":         "5,123.591",
+		"=FIXED(5123.591,1)":       "5,123.6",
+		"=FIXED(5123.591,0)":       "5,124",
+		"=FIXED(5123.591,-1)":      "5,120",
+		"=FIXED(5123.591,-2)":      "5,100",
+		"=FIXED(5123.591,-3,TRUE)": "5000",
+		"=FIXED(5123.591,-5)":      "0",
+		"=FIXED(-77262.23973,-5)":  "-100,000",
 		// FIND
 		"=FIND(\"T\",\"Original Text\")":   "10",
 		"=FIND(\"t\",\"Original Text\")":   "13",
@@ -814,6 +1044,12 @@ func TestCalcCellValue(t *testing.T) {
 		"=RIGHTB(\"Original Text\",0)":  "",
 		"=RIGHTB(\"Original Text\",13)": "Original Text",
 		"=RIGHTB(\"Original Text\",20)": "Original Text",
+		// SUBSTITUTE
+		"=SUBSTITUTE(\"abab\",\"a\",\"X\")":                      "XbXb",
+		"=SUBSTITUTE(\"abab\",\"a\",\"X\",2)":                    "abXb",
+		"=SUBSTITUTE(\"abab\",\"x\",\"X\",2)":                    "abab",
+		"=SUBSTITUTE(\"John is 5 years old\",\"John\",\"Jack\")": "Jack is 5 years old",
+		"=SUBSTITUTE(\"John is 5 years old\",\"5\",\"6\")":       "John is 6 years old",
 		// TRIM
 		"=TRIM(\" trim text \")": "trim text",
 		"=TRIM(0)":               "0",
@@ -896,6 +1132,63 @@ func TestCalcCellValue(t *testing.T) {
 		// Web Functions
 		// ENCODEURL
 		"=ENCODEURL(\"https://xuri.me/excelize/en/?q=Save As\")": "https%3A%2F%2Fxuri.me%2Fexcelize%2Fen%2F%3Fq%3DSave%20As",
+		// Financial Functions
+		// CUMIPMT
+		"=CUMIPMT(0.05/12,60,50000,1,12,0)":  "-2294.97753732664",
+		"=CUMIPMT(0.05/12,60,50000,13,24,0)": "-1833.1000665738893",
+		// CUMPRINC
+		"=CUMPRINC(0.05/12,60,50000,1,12,0)":  "-9027.762649079885",
+		"=CUMPRINC(0.05/12,60,50000,13,24,0)": "-9489.640119832635",
+		// DB
+		"=DB(0,1000,5,1)":       "0",
+		"=DB(10000,1000,5,1)":   "3690",
+		"=DB(10000,1000,5,2)":   "2328.39",
+		"=DB(10000,1000,5,1,6)": "1845",
+		"=DB(10000,1000,5,6,6)": "238.52712458788187",
+		// DDB
+		"=DDB(0,1000,5,1)":     "0",
+		"=DDB(10000,1000,5,1)": "4000",
+		"=DDB(10000,1000,5,2)": "2400",
+		"=DDB(10000,1000,5,3)": "1440",
+		"=DDB(10000,1000,5,4)": "864",
+		"=DDB(10000,1000,5,5)": "296",
+		// DOLLARDE
+		"=DOLLARDE(1.01,16)": "1.0625",
+		// DOLLARFR
+		"=DOLLARFR(1.0625,16)": "1.01",
+		// EFFECT
+		"=EFFECT(0.1,4)":   "0.103812890625",
+		"=EFFECT(0.025,2)": "0.02515625",
+		// FV
+		"=FV(0.05/12,60,-1000)":   "68006.08284084337",
+		"=FV(0.1/4,16,-2000,0,1)": "39729.46089416617",
+		"=FV(0,16,-2000)":         "32000",
+		// FVSCHEDULE
+		"=FVSCHEDULE(10000,A1:A5)": "240000",
+		"=FVSCHEDULE(10000,0.5)":   "15000",
+		// IPMT
+		"=IPMT(0.05/12,2,60,50000)":   "-205.26988187971995",
+		"=IPMT(0.035/4,2,8,0,5000,1)": "5.257455237829077",
+		// ISPMT
+		"=ISPMT(0.05/12,1,60,50000)": "-204.8611111111111",
+		"=ISPMT(0.05/12,2,60,50000)": "-201.38888888888886",
+		"=ISPMT(0.05/12,2,1,50000)":  "208.33333333333334",
+		// NOMINAL
+		"=NOMINAL(0.025,12)": "0.024718035238113",
+		// NPER
+		"=NPER(0.04,-6000,50000)":           "10.338035071507665",
+		"=NPER(0,-6000,50000)":              "8.333333333333334",
+		"=NPER(0.06/4,-2000,60000,30000,1)": "52.794773709274764",
+		// NPV
+		"=NPV(0.02,-5000,\"\",800)": "-4133.025759323337",
+		// PDURATION
+		"=PDURATION(0.04,10000,15000)": "10.33803507150765",
+		// PMT
+		"=PMT(0,8,0,5000,1)":       "-625",
+		"=PMT(0.035/4,8,0,5000,1)": "-600.8520271804658",
+		// PPMT
+		"=PPMT(0.05/12,2,60,50000)":   "-738.2918003208238",
+		"=PPMT(0.035/4,2,8,0,5000,1)": "-606.1094824182949",
 	}
 	for formula, expected := range mathCalc {
 		f := prepareCalcData(cellData)
@@ -907,6 +1200,14 @@ func TestCalcCellValue(t *testing.T) {
 	mathCalcError := map[string]string{
 		"=1/0": "#DIV/0!",
 		// Engineering Functions
+		// BESSELI
+		"=BESSELI()":       "BESSELI requires 2 numeric arguments",
+		"=BESSELI(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=BESSELI(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// BESSELJ
+		"=BESSELJ()":       "BESSELJ requires 2 numeric arguments",
+		"=BESSELJ(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=BESSELJ(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
 		// BIN2DEC
 		"=BIN2DEC()":     "BIN2DEC requires 1 numeric argument",
 		"=BIN2DEC(\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
@@ -966,6 +1267,12 @@ func TestCalcCellValue(t *testing.T) {
 		"=BITXOR(\"\",-1)": "#NUM!",
 		"=BITXOR(1,\"\")":  "#NUM!",
 		"=BITXOR(1,2^48)":  "#NUM!",
+		// COMPLEX
+		"=COMPLEX()":              "COMPLEX requires at least 2 arguments",
+		"=COMPLEX(10,-5,\"\")":    "#VALUE!",
+		"=COMPLEX(\"\",0)":        "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=COMPLEX(0,\"\")":        "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=COMPLEX(10,-5,\"i\",0)": "COMPLEX allows at most 3 arguments",
 		// DEC2BIN
 		"=DEC2BIN()":        "DEC2BIN requires at least 1 argument",
 		"=DEC2BIN(1,1,1)":   "DEC2BIN allows at most 2 arguments",
@@ -1008,6 +1315,92 @@ func TestCalcCellValue(t *testing.T) {
 		"=HEX2OCT(1,\"\")":  "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=HEX2OCT(-513,10)": "strconv.ParseInt: parsing \"-\": invalid syntax",
 		"=HEX2OCT(1,-1)":    "#NUM!",
+		// IMABS
+		"=IMABS()":     "IMABS requires 1 argument",
+		"=IMABS(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMAGINARY
+		"=IMAGINARY()":     "IMAGINARY requires 1 argument",
+		"=IMAGINARY(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMARGUMENT
+		"=IMARGUMENT()":     "IMARGUMENT requires 1 argument",
+		"=IMARGUMENT(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMCONJUGATE
+		"=IMCONJUGATE()":     "IMCONJUGATE requires 1 argument",
+		"=IMCONJUGATE(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMCOS
+		"=IMCOS()":     "IMCOS requires 1 argument",
+		"=IMCOS(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMCOSH
+		"=IMCOSH()":     "IMCOSH requires 1 argument",
+		"=IMCOSH(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMCOT
+		"=IMCOT()":     "IMCOT requires 1 argument",
+		"=IMCOT(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMCSC
+		"=IMCSC()":     "IMCSC requires 1 argument",
+		"=IMCSC(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMCSC(0)":    "#NUM!",
+		// IMCSCH
+		"=IMCSCH()":     "IMCSCH requires 1 argument",
+		"=IMCSCH(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMCSCH(0)":    "#NUM!",
+		// IMDIV
+		"=IMDIV()":       "IMDIV requires 2 arguments",
+		"=IMDIV(0,\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMDIV(\"\",0)": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMDIV(1,0)":    "#NUM!",
+		// IMEXP
+		"=IMEXP()":     "IMEXP requires 1 argument",
+		"=IMEXP(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMLN
+		"=IMLN()":     "IMLN requires 1 argument",
+		"=IMLN(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMLN(0)":    "#NUM!",
+		// IMLOG10
+		"=IMLOG10()":     "IMLOG10 requires 1 argument",
+		"=IMLOG10(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMLOG10(0)":    "#NUM!",
+		// IMLOG2
+		"=IMLOG2()":     "IMLOG2 requires 1 argument",
+		"=IMLOG2(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMLOG2(0)":    "#NUM!",
+		// IMPOWER
+		"=IMPOWER()":       "IMPOWER requires 2 arguments",
+		"=IMPOWER(0,\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMPOWER(\"\",0)": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMPOWER(0,0)":    "#NUM!",
+		"=IMPOWER(0,-1)":   "#NUM!",
+		// IMPRODUCT
+		"=IMPRODUCT(\"x\")": "strconv.ParseComplex: parsing \"x\": invalid syntax",
+		"=IMPRODUCT(A1:D1)": "strconv.ParseComplex: parsing \"Month\": invalid syntax",
+		// IMREAL
+		"=IMREAL()":     "IMREAL requires 1 argument",
+		"=IMREAL(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMSEC
+		"=IMSEC()":     "IMSEC requires 1 argument",
+		"=IMSEC(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMSECH
+		"=IMSECH()":     "IMSECH requires 1 argument",
+		"=IMSECH(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMSIN
+		"=IMSIN()":     "IMSIN requires 1 argument",
+		"=IMSIN(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMSINH
+		"=IMSINH()":     "IMSINH requires 1 argument",
+		"=IMSINH(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMSQRT
+		"=IMSQRT()":     "IMSQRT requires 1 argument",
+		"=IMSQRT(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMSUB
+		"=IMSUB()":       "IMSUB requires 2 arguments",
+		"=IMSUB(0,\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		"=IMSUB(\"\",0)": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMSUM
+		"=IMSUM()":     "IMSUM requires at least 1 argument",
+		"=IMSUM(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
+		// IMTAN
+		"=IMTAN()":     "IMTAN requires 1 argument",
+		"=IMTAN(\"\")": "strconv.ParseComplex: parsing \"\": invalid syntax",
 		// OCT2BIN
 		"=OCT2BIN()":               "OCT2BIN requires at least 1 argument",
 		"=OCT2BIN(1,1,1)":          "OCT2BIN allows at most 2 arguments",
@@ -1046,6 +1439,7 @@ func TestCalcCellValue(t *testing.T) {
 		"=_xlfn.ACOTH(_xlfn.ACOTH(2))": "#NUM!",
 		// _xlfn.ARABIC
 		"=_xlfn.ARABIC()": "ARABIC requires 1 numeric argument",
+		"=_xlfn.ARABIC(\"" + strings.Repeat("I", 256) + "\")": "#VALUE!",
 		// ASIN
 		"=ASIN()":    "ASIN requires 1 numeric argument",
 		`=ASIN("X")`: "strconv.ParseFloat: parsing \"X\": invalid syntax",
@@ -1280,9 +1674,19 @@ func TestCalcCellValue(t *testing.T) {
 		// STDEV
 		"=STDEV()":      "STDEV requires at least 1 argument",
 		"=STDEV(E2:E9)": "#DIV/0!",
+		// STDEV.S
+		"=STDEV.S()": "STDEV.S requires at least 1 argument",
 		// STDEVA
 		"=STDEVA()":      "STDEVA requires at least 1 argument",
 		"=STDEVA(E2:E9)": "#DIV/0!",
+		// POISSON.DIST
+		"=POISSON.DIST()": "POISSON.DIST requires 3 arguments",
+		// POISSON
+		"=POISSON()":             "POISSON requires 3 arguments",
+		"=POISSON(\"\",0,FALSE)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=POISSON(0,\"\",FALSE)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=POISSON(0,0,\"\")":     "strconv.ParseBool: parsing \"\": invalid syntax",
+		"=POISSON(0,-1,TRUE)":    "#N/A",
 		// SUM
 		"=SUM((":   "formula not valid",
 		"=SUM(-)":  "formula not valid",
@@ -1331,9 +1735,45 @@ func TestCalcCellValue(t *testing.T) {
 		"=GAMMALN(F1)":     "GAMMALN requires 1 numeric argument",
 		"=GAMMALN(0)":      "#N/A",
 		"=GAMMALN(INT(0))": "#N/A",
+		// HARMEAN
+		"=HARMEAN()":   "HARMEAN requires at least 1 argument",
+		"=HARMEAN(-1)": "#N/A",
+		"=HARMEAN(0)":  "#N/A",
 		// KURT
 		"=KURT()":          "KURT requires at least 1 argument",
 		"=KURT(F1,INT(1))": "#DIV/0!",
+		// NORM.DIST
+		"=NORM.DIST()": "NORM.DIST requires 4 arguments",
+		// NORMDIST
+		"=NORMDIST()":               "NORMDIST requires 4 arguments",
+		"=NORMDIST(\"\",0,0,FALSE)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NORMDIST(0,\"\",0,FALSE)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NORMDIST(0,0,\"\",FALSE)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NORMDIST(0,0,0,\"\")":     "strconv.ParseBool: parsing \"\": invalid syntax",
+		"=NORMDIST(0,0,-1,TRUE)":    "#N/A",
+		// NORM.INV
+		"=NORM.INV()": "NORM.INV requires 3 arguments",
+		// NORMINV
+		"=NORMINV()":         "NORMINV requires 3 arguments",
+		"=NORMINV(\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NORMINV(0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NORMINV(0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NORMINV(0,0,-1)":   "#N/A",
+		"=NORMINV(-1,0,0)":   "#N/A",
+		"=NORMINV(0,0,0)":    "#NUM!",
+		// NORM.S.DIST
+		"=NORM.S.DIST()": "NORM.S.DIST requires 2 numeric arguments",
+		// NORMSDIST
+		"=NORMSDIST()": "NORMSDIST requires 1 numeric argument",
+		// NORM.S.INV
+		"=NORM.S.INV()": "NORM.S.INV requires 1 numeric argument",
+		// NORMSINV
+		"=NORMSINV()": "NORMSINV requires 1 numeric argument",
+		// LARGE
+		"=LARGE()":           "LARGE requires 2 arguments",
+		"=LARGE(A1:A5,0)":    "k should be > 0",
+		"=LARGE(A1:A5,6)":    "k should be <= length of array",
+		"=LARGE(A1:A5,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
 		// MAX
 		"=MAX()":     "MAX requires at least 1 argument",
 		"=MAX(NA())": "#N/A",
@@ -1350,11 +1790,46 @@ func TestCalcCellValue(t *testing.T) {
 		// MINA
 		"=MINA()":     "MINA requires at least 1 argument",
 		"=MINA(NA())": "#N/A",
+		// PERCENTILE.INC
+		"=PERCENTILE.INC()": "PERCENTILE.INC requires 2 arguments",
+		// PERCENTILE
+		"=PERCENTILE()":       "PERCENTILE requires 2 arguments",
+		"=PERCENTILE(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PERCENTILE(0,-1)":   "#N/A",
+		"=PERCENTILE(NA(),1)": "#N/A",
 		// PERMUT
 		"=PERMUT()":       "PERMUT requires 2 numeric arguments",
 		"=PERMUT(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=PERMUT(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=PERMUT(6,8)":    "#N/A",
+		// PERMUTATIONA
+		"=PERMUTATIONA()":       "PERMUTATIONA requires 2 numeric arguments",
+		"=PERMUTATIONA(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PERMUTATIONA(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PERMUTATIONA(-1,0)":   "#N/A",
+		"=PERMUTATIONA(0,-1)":   "#N/A",
+		// QUARTILE
+		"=QUARTILE()":           "QUARTILE requires 2 arguments",
+		"=QUARTILE(A1:A4,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=QUARTILE(A1:A4,-1)":   "#NUM!",
+		"=QUARTILE(A1:A4,5)":    "#NUM!",
+		// QUARTILE.INC
+		"=QUARTILE.INC()": "QUARTILE.INC requires 2 arguments",
+		// SKEW
+		"=SKEW()":     "SKEW requires at least 1 argument",
+		"=SKEW(\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=SKEW(0)":    "#DIV/0!",
+		// SMALL
+		"=SMALL()":           "SMALL requires 2 arguments",
+		"=SMALL(A1:A5,0)":    "k should be > 0",
+		"=SMALL(A1:A5,6)":    "k should be <= length of array",
+		"=SMALL(A1:A5,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// VARP
+		"=VARP()":     "VARP requires at least 1 argument",
+		"=VARP(\"\")": "#DIV/0!",
+		// VAR.P
+		"=VAR.P()":     "VAR.P requires at least 1 argument",
+		"=VAR.P(\"\")": "#DIV/0!",
 		// Information Functions
 		// ISBLANK
 		"=ISBLANK(A1,A2)": "ISBLANK requires 1 argument",
@@ -1376,11 +1851,17 @@ func TestCalcCellValue(t *testing.T) {
 		`=ISODD("text")`: "strconv.Atoi: parsing \"text\": invalid syntax",
 		// ISTEXT
 		"=ISTEXT()": "ISTEXT requires 1 argument",
+		// N
+		"=N()":     "N requires 1 argument",
+		"=N(NA())": "#N/A",
 		// NA
 		"=NA()":  "#N/A",
 		"=NA(1)": "NA accepts no arguments",
 		// SHEET
 		"=SHEET(1)": "SHEET accepts no arguments",
+		// T
+		"=T()":     "T requires 1 argument",
+		"=T(NA())": "#N/A",
 		// Logical Functions
 		// AND
 		`=AND("text")`: "strconv.ParseFloat: parsing \"text\": invalid syntax",
@@ -1408,6 +1889,15 @@ func TestCalcCellValue(t *testing.T) {
 		`=DATE("text",10,21)`:   "DATE requires 3 number arguments",
 		`=DATE(2020,"text",21)`: "DATE requires 3 number arguments",
 		`=DATE(2020,10,"text")`: "DATE requires 3 number arguments",
+		// DATEDIF
+		"=DATEDIF()":                  "DATEDIF requires 3 number arguments",
+		"=DATEDIF(\"\",\"\",\"\")":    "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DATEDIF(43891,43101,\"Y\")": "start_date > end_date",
+		"=DATEDIF(43101,43891,\"x\")": "DATEDIF has invalid unit",
+		// NOW
+		"=NOW(A1)": "NOW accepts no arguments",
+		// TODAY
+		"=TODAY(A1)": "TODAY accepts no arguments",
 		// Text Functions
 		// CHAR
 		"=CHAR()":     "CHAR requires 1 argument",
@@ -1427,6 +1917,12 @@ func TestCalcCellValue(t *testing.T) {
 		// EXACT
 		"=EXACT()":      "EXACT requires 2 arguments",
 		"=EXACT(1,2,3)": "EXACT requires 2 arguments",
+		// FIXED
+		"=FIXED()":         "FIXED requires at least 1 argument",
+		"=FIXED(0,1,2,3)":  "FIXED allows at most 3 arguments",
+		"=FIXED(\"\")":     "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=FIXED(0,\"\")":   "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=FIXED(0,0,\"\")": "strconv.ParseBool: parsing \"\": invalid syntax",
 		// FIND
 		"=FIND()":                 "FIND requires at least 2 arguments",
 		"=FIND(1,2,3,4)":          "FIND allows at most 3 arguments",
@@ -1494,6 +1990,10 @@ func TestCalcCellValue(t *testing.T) {
 		"=RIGHTB(\"\",2,3)":  "RIGHTB allows at most 2 arguments",
 		"=RIGHTB(\"\",\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=RIGHTB(\"\",-1)":   "#VALUE!",
+		// SUBSTITUTE
+		"=SUBSTITUTE()":                    "SUBSTITUTE requires 3 or 4 arguments",
+		"=SUBSTITUTE(\"\",\"\",\"\",\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=SUBSTITUTE(\"\",\"\",\"\",0)":    "instance_num should be > 0",
 		// TRIM
 		"=TRIM()":    "TRIM requires 1 argument",
 		"=TRIM(1,2)": "TRIM requires 1 argument",
@@ -1576,6 +2076,142 @@ func TestCalcCellValue(t *testing.T) {
 		// Web Functions
 		// ENCODEURL
 		"=ENCODEURL()": "ENCODEURL requires 1 argument",
+		// Financial Functions
+		// CUMIPMT
+		"=CUMIPMT()":               "CUMIPMT requires 6 arguments",
+		"=CUMIPMT(0,0,0,0,0,2)":    "#N/A",
+		"=CUMIPMT(0,0,0,-1,0,0)":   "#N/A",
+		"=CUMIPMT(0,0,0,1,0,0)":    "#N/A",
+		"=CUMIPMT(\"\",0,0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMIPMT(0,\"\",0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMIPMT(0,0,\"\",0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMIPMT(0,0,0,\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMIPMT(0,0,0,0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMIPMT(0,0,0,0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// CUMPRINC
+		"=CUMPRINC()":               "CUMPRINC requires 6 arguments",
+		"=CUMPRINC(0,0,0,0,0,2)":    "#N/A",
+		"=CUMPRINC(0,0,0,-1,0,0)":   "#N/A",
+		"=CUMPRINC(0,0,0,1,0,0)":    "#N/A",
+		"=CUMPRINC(\"\",0,0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMPRINC(0,\"\",0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMPRINC(0,0,\"\",0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMPRINC(0,0,0,\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMPRINC(0,0,0,0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CUMPRINC(0,0,0,0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// DB
+		"=DB()":             "DB requires at least 4 arguments",
+		"=DB(0,0,0,0,0,0)":  "DB allows at most 5 arguments",
+		"=DB(-1,0,0,0)":     "#N/A",
+		"=DB(\"\",0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DB(0,\"\",0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DB(0,0,\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DB(0,0,0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DB(0,0,0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// DDB
+		"=DDB()":             "DDB requires at least 4 arguments",
+		"=DDB(0,0,0,0,0,0)":  "DDB allows at most 5 arguments",
+		"=DDB(-1,0,0,0)":     "#N/A",
+		"=DDB(\"\",0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DDB(0,\"\",0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DDB(0,0,\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DDB(0,0,0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DDB(0,0,0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// DOLLARDE
+		"=DOLLARDE()":       "DOLLARDE requires 2 arguments",
+		"=DOLLARDE(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DOLLARDE(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DOLLARDE(0,-1)":   "#NUM!",
+		"=DOLLARDE(0,0)":    "#DIV/0!",
+		// DOLLARFR
+		"=DOLLARFR()":       "DOLLARFR requires 2 arguments",
+		"=DOLLARFR(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DOLLARFR(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=DOLLARFR(0,-1)":   "#NUM!",
+		"=DOLLARFR(0,0)":    "#DIV/0!",
+		// EFFECT
+		"=EFFECT()":       "EFFECT requires 2 arguments",
+		"=EFFECT(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=EFFECT(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=EFFECT(0,0)":    "#NUM!",
+		"=EFFECT(1,0)":    "#NUM!",
+		// FV
+		"=FV()":              "FV requires at least 3 arguments",
+		"=FV(0,0,0,0,0,0,0)": "FV allows at most 5 arguments",
+		"=FV(0,0,0,0,2)":     "#N/A",
+		"=FV(\"\",0,0,0,0)":  "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=FV(0,\"\",0,0,0)":  "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=FV(0,0,\"\",0,0)":  "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=FV(0,0,0,\"\",0)":  "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=FV(0,0,0,0,\"\")":  "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// FVSCHEDULE
+		"=FVSCHEDULE()":        "FVSCHEDULE requires 2 arguments",
+		"=FVSCHEDULE(\"\",0)":  "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=FVSCHEDULE(0,\"x\")": "strconv.ParseFloat: parsing \"x\": invalid syntax",
+		// IPMT
+		"=IPMT()":               "IPMT requires at least 4 arguments",
+		"=IPMT(0,0,0,0,0,0,0)":  "IPMT allows at most 6 arguments",
+		"=IPMT(0,0,0,0,0,2)":    "#N/A",
+		"=IPMT(0,-1,0,0,0,0)":   "#N/A",
+		"=IPMT(0,1,0,0,0,0)":    "#N/A",
+		"=IPMT(\"\",0,0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=IPMT(0,\"\",0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=IPMT(0,0,\"\",0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=IPMT(0,0,0,\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=IPMT(0,0,0,0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=IPMT(0,0,0,0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// ISPMT
+		"=ISPMT()":           "ISPMT requires 4 arguments",
+		"=ISPMT(\"\",0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=ISPMT(0,\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=ISPMT(0,0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=ISPMT(0,0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// NOMINAL
+		"=NOMINAL()":       "NOMINAL requires 2 arguments",
+		"=NOMINAL(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NOMINAL(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NOMINAL(0,0)":    "#NUM!",
+		"=NOMINAL(1,0)":    "#NUM!",
+		// NPER
+		"=NPER()":             "NPER requires at least 3 arguments",
+		"=NPER(0,0,0,0,0,0)":  "NPER allows at most 5 arguments",
+		"=NPER(0,0,0)":        "#NUM!",
+		"=NPER(0,0,0,0,2)":    "#N/A",
+		"=NPER(\"\",0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NPER(0,\"\",0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NPER(0,0,\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NPER(0,0,0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=NPER(0,0,0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// NPV
+		"=NPV()":       "NPV requires at least 2 arguments",
+		"=NPV(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// PDURATION
+		"=PDURATION()":         "PDURATION requires 3 arguments",
+		"=PDURATION(\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PDURATION(0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PDURATION(0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PDURATION(0,0,0)":    "#NUM!",
+		// PMT
+		"=PMT()":             "PMT requires at least 3 arguments",
+		"=PMT(0,0,0,0,0,0)":  "PMT allows at most 5 arguments",
+		"=PMT(0,0,0,0,2)":    "#N/A",
+		"=PMT(\"\",0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PMT(0,\"\",0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PMT(0,0,\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PMT(0,0,0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PMT(0,0,0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// PPMT
+		"=PPMT()":               "PPMT requires at least 4 arguments",
+		"=PPMT(0,0,0,0,0,0,0)":  "PPMT allows at most 6 arguments",
+		"=PPMT(0,0,0,0,0,2)":    "#N/A",
+		"=PPMT(0,-1,0,0,0,0)":   "#N/A",
+		"=PPMT(0,1,0,0,0,0)":    "#N/A",
+		"=PPMT(\"\",0,0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PPMT(0,\"\",0,0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PPMT(0,0,\"\",0,0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PPMT(0,0,0,\"\",0,0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PPMT(0,0,0,0,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=PPMT(0,0,0,0,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
 	}
 	for formula, expected := range mathCalcError {
 		f := prepareCalcData(cellData)
@@ -1590,6 +2226,8 @@ func TestCalcCellValue(t *testing.T) {
 		"=MDETERM(A1:B2)": "-3",
 		// PRODUCT
 		"=PRODUCT(Sheet1!A1:Sheet1!A1:A2,A2)": "4",
+		// IMPRODUCT
+		"=IMPRODUCT(Sheet1!A1:Sheet1!A1:A2,A2)": "4",
 		// SUM
 		"=A1/A3":                          "0.333333333333333",
 		"=SUM(A1:A2)":                     "3",
@@ -1626,8 +2264,10 @@ func TestCalcCellValue(t *testing.T) {
 	}
 
 	volatileFuncs := []string{
+		"=NOW()",
 		"=RAND()",
 		"=RANDBETWEEN(1,2)",
+		"=TODAY()",
 	}
 	for _, formula := range volatileFuncs {
 		f := prepareCalcData(cellData)
@@ -1874,6 +2514,61 @@ func TestCalcHLOOKUP(t *testing.T) {
 	for formula, expected := range calcError {
 		assert.NoError(t, f.SetCellFormula("Sheet1", "B10", formula))
 		result, err := f.CalcCellValue("Sheet1", "B10")
+		assert.EqualError(t, err, expected, formula)
+		assert.Equal(t, "", result, formula)
+	}
+}
+
+func TestCalcIRR(t *testing.T) {
+	cellData := [][]interface{}{{-1}, {0.2}, {0.24}, {0.288}, {0.3456}, {0.4147}}
+	f := prepareCalcData(cellData)
+	formulaList := map[string]string{
+		"=IRR(A1:A4)":      "-0.136189509034157",
+		"=IRR(A1:A6)":      "0.130575760006905",
+		"=IRR(A1:A4,-0.1)": "-0.136189514994621",
+	}
+	for formula, expected := range formulaList {
+		assert.NoError(t, f.SetCellFormula("Sheet1", "B1", formula))
+		result, err := f.CalcCellValue("Sheet1", "B1")
+		assert.NoError(t, err, formula)
+		assert.Equal(t, expected, result, formula)
+	}
+	calcError := map[string]string{
+		"=IRR()":       "IRR requires at least 1 argument",
+		"=IRR(0,0,0)":  "IRR allows at most 2 arguments",
+		"=IRR(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=IRR(A2:A3)":  "#NUM!",
+	}
+	for formula, expected := range calcError {
+		assert.NoError(t, f.SetCellFormula("Sheet1", "B1", formula))
+		result, err := f.CalcCellValue("Sheet1", "B1")
+		assert.EqualError(t, err, expected, formula)
+		assert.Equal(t, "", result, formula)
+	}
+}
+
+func TestCalcMIRR(t *testing.T) {
+	cellData := [][]interface{}{{-100}, {18}, {22.5}, {28}, {35.5}, {45}}
+	f := prepareCalcData(cellData)
+	formulaList := map[string]string{
+		"=MIRR(A1:A5,0.055,0.05)": "0.025376365108071",
+		"=MIRR(A1:A6,0.055,0.05)": "0.1000268752662",
+	}
+	for formula, expected := range formulaList {
+		assert.NoError(t, f.SetCellFormula("Sheet1", "B1", formula))
+		result, err := f.CalcCellValue("Sheet1", "B1")
+		assert.NoError(t, err, formula)
+		assert.Equal(t, expected, result, formula)
+	}
+	calcError := map[string]string{
+		"=MIRR()":             "MIRR requires 3 arguments",
+		"=MIRR(A1:A5,\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=MIRR(A1:A5,0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=MIRR(B1:B5,0,0)":    "#DIV/0!",
+	}
+	for formula, expected := range calcError {
+		assert.NoError(t, f.SetCellFormula("Sheet1", "B1", formula))
+		result, err := f.CalcCellValue("Sheet1", "B1")
 		assert.EqualError(t, err, expected, formula)
 		assert.Equal(t, "", result, formula)
 	}

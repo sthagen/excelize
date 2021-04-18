@@ -55,8 +55,8 @@ func TestStreamWriter(t *testing.T) {
 	// Test set cell with style.
 	styleID, err := file.NewStyle(`{"font":{"color":"#777777"}}`)
 	assert.NoError(t, err)
-	assert.NoError(t, streamWriter.SetRow("A4", []interface{}{Cell{StyleID: styleID}}))
-	assert.NoError(t, streamWriter.SetRow("A5", []interface{}{&Cell{StyleID: styleID, Value: "cell"}}))
+	assert.NoError(t, streamWriter.SetRow("A4", []interface{}{Cell{StyleID: styleID}, Cell{Formula: "SUM(A10,B10)"}}))
+	assert.NoError(t, streamWriter.SetRow("A5", []interface{}{&Cell{StyleID: styleID, Value: "cell"}, &Cell{Formula: "SUM(A10,B10)"}}))
 	assert.EqualError(t, streamWriter.SetRow("A6", []interface{}{time.Now()}), "only UTC time expected")
 
 	for rowID := 10; rowID <= 51200; rowID++ {
@@ -94,7 +94,7 @@ func TestStreamWriter(t *testing.T) {
 	assert.NoError(t, streamWriter.rawData.tmp.Close())
 	assert.NoError(t, os.Remove(streamWriter.rawData.tmp.Name()))
 
-	// Test unsupport charset
+	// Test unsupported charset
 	file = NewFile()
 	delete(file.Sheet, "xl/worksheets/sheet1.xml")
 	file.XLSX["xl/worksheets/sheet1.xml"] = MacintoshCyrillicCharset
