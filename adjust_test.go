@@ -73,20 +73,10 @@ func TestAdjustAutoFilter(t *testing.T) {
 func TestAdjustHelper(t *testing.T) {
 	f := NewFile()
 	f.NewSheet("Sheet2")
-	f.Sheet["xl/worksheets/sheet1.xml"] = &xlsxWorksheet{
-		MergeCells: &xlsxMergeCells{
-			Cells: []*xlsxMergeCell{
-				{
-					Ref: "A:B1",
-				},
-			},
-		},
-	}
-	f.Sheet["xl/worksheets/sheet2.xml"] = &xlsxWorksheet{
-		AutoFilter: &xlsxAutoFilter{
-			Ref: "A1:B",
-		},
-	}
+	f.Sheet.Store("xl/worksheets/sheet1.xml", &xlsxWorksheet{
+		MergeCells: &xlsxMergeCells{Cells: []*xlsxMergeCell{{Ref: "A:B1"}}}})
+	f.Sheet.Store("xl/worksheets/sheet2.xml", &xlsxWorksheet{
+		AutoFilter: &xlsxAutoFilter{Ref: "A1:B"}})
 	// testing adjustHelper with illegal cell coordinates.
 	assert.EqualError(t, f.adjustHelper("Sheet1", rows, 0, 0), `cannot convert cell "A" to coordinates: invalid cell name "A"`)
 	assert.EqualError(t, f.adjustHelper("Sheet2", rows, 0, 0), `cannot convert cell "B" to coordinates: invalid cell name "B"`)
@@ -113,7 +103,7 @@ func TestAdjustCalcChain(t *testing.T) {
 func TestCoordinatesToAreaRef(t *testing.T) {
 	f := NewFile()
 	_, err := f.coordinatesToAreaRef([]int{})
-	assert.EqualError(t, err, "coordinates length must be 4")
+	assert.EqualError(t, err, ErrCoordinates.Error())
 	_, err = f.coordinatesToAreaRef([]int{1, -1, 1, 1})
 	assert.EqualError(t, err, "invalid cell coordinates [1, -1]")
 	_, err = f.coordinatesToAreaRef([]int{1, 1, 1, -1})
@@ -124,5 +114,5 @@ func TestCoordinatesToAreaRef(t *testing.T) {
 }
 
 func TestSortCoordinates(t *testing.T) {
-	assert.EqualError(t, sortCoordinates(make([]int, 3)), "coordinates length must be 4")
+	assert.EqualError(t, sortCoordinates(make([]int, 3)), ErrCoordinates.Error())
 }

@@ -34,24 +34,36 @@ func TestCalcCellValue(t *testing.T) {
 		{nil, nil, nil, "Feb", "South 2", 45500},
 	}
 	mathCalc := map[string]string{
-		"=2^3":  "8",
-		"=1=1":  "TRUE",
-		"=1=2":  "FALSE",
-		"=1<2":  "TRUE",
-		"=3<2":  "FALSE",
-		"=2<=3": "TRUE",
-		"=2<=1": "FALSE",
-		"=2>1":  "TRUE",
-		"=2>3":  "FALSE",
-		"=2>=1": "TRUE",
-		"=2>=3": "FALSE",
-		"=1&2":  "12",
+		"=2^3":      "8",
+		"=1=1":      "TRUE",
+		"=1=2":      "FALSE",
+		"=1<2":      "TRUE",
+		"=3<2":      "FALSE",
+		"=2<=3":     "TRUE",
+		"=2<=1":     "FALSE",
+		"=2>1":      "TRUE",
+		"=2>3":      "FALSE",
+		"=2>=1":     "TRUE",
+		"=2>=3":     "FALSE",
+		"=1&2":      "12",
+		`="A"="A"`:  "TRUE",
+		`="A"<>"A"`: "FALSE",
 		// Engineering Functions
 		// BESSELI
 		"=BESSELI(4.5,1)": "15.389222753735925",
 		"=BESSELI(32,1)":  "5.502845511211247e+12",
 		// BESSELJ
 		"=BESSELJ(1.9,2)": "0.329925727692387",
+		// BESSELK
+		"=BESSELK(0.05,0)": "3.114234034289662",
+		"=BESSELK(0.05,1)": "19.90967432724863",
+		"=BESSELK(0.05,2)": "799.501207124235",
+		"=BESSELK(3,2)":    "0.061510458561912",
+		// BESSELY
+		"=BESSELY(0.05,0)": "-1.979311006841528",
+		"=BESSELY(0.05,1)": "-12.789855163794034",
+		"=BESSELY(0.05,2)": "-509.61489554491976",
+		"=BESSELY(9,2)":    "-0.229082087487741",
 		// BIN2DEC
 		"=BIN2DEC(\"10\")":         "2",
 		"=BIN2DEC(\"11\")":         "3",
@@ -1074,6 +1086,10 @@ func TestCalcCellValue(t *testing.T) {
 		"=IF(1<>1)":                             "FALSE",
 		"=IF(5<0, \"negative\", \"positive\")":  "positive",
 		"=IF(-2<0, \"negative\", \"positive\")": "negative",
+		`=IF(1=1, "equal", "notequal")`:         "equal",
+		`=IF(1<>1, "equal", "notequal")`:        "notequal",
+		`=IF("A"="A", "equal", "notequal")`:     "equal",
+		`=IF("A"<>"A", "equal", "notequal")`:    "notequal",
 		// Excel Lookup and Reference Functions
 		// CHOOSE
 		"=CHOOSE(4,\"red\",\"blue\",\"green\",\"brown\")": "brown",
@@ -1208,6 +1224,18 @@ func TestCalcCellValue(t *testing.T) {
 		"=BESSELJ()":       "BESSELJ requires 2 numeric arguments",
 		"=BESSELJ(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=BESSELJ(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// BESSELK
+		"=BESSELK()":       "BESSELK requires 2 numeric arguments",
+		"=BESSELK(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=BESSELK(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=BESSELK(-1,0)":   "#NUM!",
+		"=BESSELK(1,-1)":   "#NUM!",
+		// BESSELY
+		"=BESSELY()":       "BESSELY requires 2 numeric arguments",
+		"=BESSELY(\"\",0)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=BESSELY(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=BESSELY(-1,0)":   "#NUM!",
+		"=BESSELY(1,-1)":   "#NUM!",
 		// BIN2DEC
 		"=BIN2DEC()":     "BIN2DEC requires 1 numeric argument",
 		"=BIN2DEC(\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
@@ -1688,12 +1716,12 @@ func TestCalcCellValue(t *testing.T) {
 		"=POISSON(0,0,\"\")":     "strconv.ParseBool: parsing \"\": invalid syntax",
 		"=POISSON(0,-1,TRUE)":    "#N/A",
 		// SUM
-		"=SUM((":   "formula not valid",
-		"=SUM(-)":  "formula not valid",
-		"=SUM(1+)": "formula not valid",
-		"=SUM(1-)": "formula not valid",
-		"=SUM(1*)": "formula not valid",
-		"=SUM(1/)": "formula not valid",
+		"=SUM((":   ErrInvalidFormula.Error(),
+		"=SUM(-)":  ErrInvalidFormula.Error(),
+		"=SUM(1+)": ErrInvalidFormula.Error(),
+		"=SUM(1-)": ErrInvalidFormula.Error(),
+		"=SUM(1*)": ErrInvalidFormula.Error(),
+		"=SUM(1/)": ErrInvalidFormula.Error(),
 		// SUMIF
 		"=SUMIF()": "SUMIF requires at least 2 argument",
 		// SUMSQ
@@ -2313,11 +2341,18 @@ func TestCalcWithDefinedName(t *testing.T) {
 	f := prepareCalcData(cellData)
 	assert.NoError(t, f.SetDefinedName(&DefinedName{Name: "defined_name1", RefersTo: "Sheet1!A1", Scope: "Workbook"}))
 	assert.NoError(t, f.SetDefinedName(&DefinedName{Name: "defined_name1", RefersTo: "Sheet1!B1", Scope: "Sheet1"}))
+
 	assert.NoError(t, f.SetCellFormula("Sheet1", "C1", "=defined_name1"))
 	result, err := f.CalcCellValue("Sheet1", "C1")
 	assert.NoError(t, err)
 	// DefinedName with scope WorkSheet takes precedence over DefinedName with scope Workbook, so we should get B1 value
 	assert.Equal(t, "B1 value", result, "=defined_name1")
+
+	assert.NoError(t, f.SetCellFormula("Sheet1", "C1", "=CONCATENATE(\"<\",defined_name1,\">\")"))
+	result, err = f.CalcCellValue("Sheet1", "C1")
+	assert.NoError(t, err)
+	assert.Equal(t, "<B1 value>", result, "=defined_name1")
+
 }
 
 func TestCalcArithmeticOperations(t *testing.T) {

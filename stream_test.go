@@ -40,7 +40,7 @@ func TestStreamWriter(t *testing.T) {
 
 	// Test max characters in a cell.
 	row := make([]interface{}, 1)
-	row[0] = strings.Repeat("c", 32769)
+	row[0] = strings.Repeat("c", TotalCellChars+2)
 	assert.NoError(t, streamWriter.SetRow("A1", row))
 
 	// Test leading and ending space(s) character characters in a cell.
@@ -57,7 +57,7 @@ func TestStreamWriter(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, streamWriter.SetRow("A4", []interface{}{Cell{StyleID: styleID}, Cell{Formula: "SUM(A10,B10)"}}))
 	assert.NoError(t, streamWriter.SetRow("A5", []interface{}{&Cell{StyleID: styleID, Value: "cell"}, &Cell{Formula: "SUM(A10,B10)"}}))
-	assert.EqualError(t, streamWriter.SetRow("A6", []interface{}{time.Now()}), "only UTC time expected")
+	assert.NoError(t, streamWriter.SetRow("A6", []interface{}{time.Now()}))
 
 	for rowID := 10; rowID <= 51200; rowID++ {
 		row := make([]interface{}, 50)
@@ -71,6 +71,9 @@ func TestStreamWriter(t *testing.T) {
 	assert.NoError(t, streamWriter.Flush())
 	// Save spreadsheet by the given path.
 	assert.NoError(t, file.SaveAs(filepath.Join("test", "TestStreamWriter.xlsx")))
+
+	// Test set cell column overflow.
+	assert.EqualError(t, streamWriter.SetRow("XFD1", []interface{}{"A", "B", "C"}), ErrColumnNumber.Error())
 
 	// Test close temporary file error.
 	file = NewFile()
@@ -96,10 +99,32 @@ func TestStreamWriter(t *testing.T) {
 
 	// Test unsupported charset
 	file = NewFile()
-	delete(file.Sheet, "xl/worksheets/sheet1.xml")
-	file.XLSX["xl/worksheets/sheet1.xml"] = MacintoshCyrillicCharset
+	file.Sheet.Delete("xl/worksheets/sheet1.xml")
+	file.Pkg.Store("xl/worksheets/sheet1.xml", MacintoshCyrillicCharset)
 	_, err = file.NewStreamWriter("Sheet1")
 	assert.EqualError(t, err, "xml decode error: XML syntax error on line 1: invalid UTF-8")
+
+	// Test read cell.
+	file = NewFile()
+	streamWriter, err = file.NewStreamWriter("Sheet1")
+	assert.NoError(t, err)
+	assert.NoError(t, streamWriter.SetRow("A1", []interface{}{Cell{StyleID: styleID, Value: "Data"}}))
+	assert.NoError(t, streamWriter.Flush())
+	cellValue, err := file.GetCellValue("Sheet1", "A1")
+	assert.NoError(t, err)
+	assert.Equal(t, "Data", cellValue)
+}
+
+func TestStreamSetColWidth(t *testing.T) {
+	file := NewFile()
+	streamWriter, err := file.NewStreamWriter("Sheet1")
+	assert.NoError(t, err)
+	assert.NoError(t, streamWriter.SetColWidth(3, 2, 20))
+	assert.EqualError(t, streamWriter.SetColWidth(0, 3, 20), ErrColumnNumber.Error())
+	assert.EqualError(t, streamWriter.SetColWidth(TotalColumns+1, 3, 20), ErrColumnNumber.Error())
+	assert.EqualError(t, streamWriter.SetColWidth(1, 3, MaxColumnWidth+1), ErrColumnWidth.Error())
+	assert.NoError(t, streamWriter.SetRow("A1", []interface{}{"A", "B", "C"}))
+	assert.EqualError(t, streamWriter.SetColWidth(2, 3, 20), ErrStreamSetColWidth.Error())
 }
 
 func TestStreamTable(t *testing.T) {
@@ -120,7 +145,9 @@ func TestStreamTable(t *testing.T) {
 
 	// Verify the table has names.
 	var table xlsxTable
-	assert.NoError(t, xml.Unmarshal(file.XLSX["xl/tables/table1.xml"], &table))
+	val, ok := file.Pkg.Load("xl/tables/table1.xml")
+	assert.True(t, ok)
+	assert.NoError(t, xml.Unmarshal(val.([]byte), &table))
 	assert.Equal(t, "A", table.TableColumns.TableColumn[0].Name)
 	assert.Equal(t, "B", table.TableColumns.TableColumn[1].Name)
 	assert.Equal(t, "C", table.TableColumns.TableColumn[2].Name)
@@ -132,6 +159,18 @@ func TestStreamTable(t *testing.T) {
 	// Test add table with illegal cell coordinates.
 	assert.EqualError(t, streamWriter.AddTable("A", "B1", `{}`), `cannot convert cell "A" to coordinates: invalid cell name "A"`)
 	assert.EqualError(t, streamWriter.AddTable("A1", "B", `{}`), `cannot convert cell "B" to coordinates: invalid cell name "B"`)
+}
+
+func TestStreamMergeCells(t *testing.T) {
+	file := NewFile()
+	streamWriter, err := file.NewStreamWriter("Sheet1")
+	assert.NoError(t, err)
+	assert.NoError(t, streamWriter.MergeCell("A1", "D1"))
+	// Test merge cells with illegal cell coordinates.
+	assert.EqualError(t, streamWriter.MergeCell("A", "D1"), `cannot convert cell "A" to coordinates: invalid cell name "A"`)
+	assert.NoError(t, streamWriter.Flush())
+	// Save spreadsheet by the given path.
+	assert.NoError(t, file.SaveAs(filepath.Join("test", "TestStreamMergeCells.xlsx")))
 }
 
 func TestNewStreamWriter(t *testing.T) {

@@ -14,7 +14,6 @@ package excelize
 import (
 	"bytes"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -44,15 +43,19 @@ func (f *File) GetRows(sheet string) ([][]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	results := make([][]string, 0, 64)
+	results, cur, max := make([][]string, 0, 64), 0, 0
 	for rows.Next() {
+		cur++
 		row, err := rows.Columns()
 		if err != nil {
 			break
 		}
 		results = append(results, row)
+		if len(row) > 0 {
+			max = cur
+		}
 	}
-	return results, nil
+	return results[:max], nil
 }
 
 // Rows defines an iterator to a sheet.
@@ -162,7 +165,9 @@ func rowXMLHandler(rowIterator *rowXMLIterator, xmlElement *xml.StartElement) {
 		}
 		blank := rowIterator.cellCol - len(rowIterator.columns)
 		val, _ := colCell.getValueFrom(rowIterator.rows.f, rowIterator.d)
-		rowIterator.columns = append(appendSpace(blank, rowIterator.columns), val)
+		if val != "" || colCell.F != nil {
+			rowIterator.columns = append(appendSpace(blank, rowIterator.columns), val)
+		}
 	}
 }
 
@@ -190,9 +195,12 @@ func (f *File) Rows(sheet string) (*Rows, error) {
 	if !ok {
 		return nil, ErrSheetNotExist{sheet}
 	}
-	if f.Sheet[name] != nil {
+	if ws, ok := f.Sheet.Load(name); ok && ws != nil {
+		worksheet := ws.(*xlsxWorksheet)
+		worksheet.Lock()
+		defer worksheet.Unlock()
 		// flush data
-		output, _ := xml.Marshal(f.Sheet[name])
+		output, _ := xml.Marshal(worksheet)
 		f.saveFileList(name, f.replaceNameSpaceBytes(name, output))
 	}
 	var (
@@ -245,7 +253,7 @@ func (f *File) SetRowHeight(sheet string, row int, height float64) error {
 		return newInvalidRowNumberError(row)
 	}
 	if height > MaxRowHeight {
-		return errors.New("the height of the row must be smaller than or equal to 409 points")
+		return ErrMaxRowHeight
 	}
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {
@@ -261,12 +269,14 @@ func (f *File) SetRowHeight(sheet string, row int, height float64) error {
 }
 
 // getRowHeight provides a function to get row height in pixels by given sheet
-// name and row index.
+// name and row number.
 func (f *File) getRowHeight(sheet string, row int) int {
 	ws, _ := f.workSheetReader(sheet)
+	ws.Lock()
+	defer ws.Unlock()
 	for i := range ws.SheetData.Row {
 		v := &ws.SheetData.Row[i]
-		if v.R == row+1 && v.Ht != 0 {
+		if v.R == row && v.Ht != 0 {
 			return int(convertRowHeightToPixels(v.Ht))
 		}
 	}
@@ -275,7 +285,7 @@ func (f *File) getRowHeight(sheet string, row int) int {
 }
 
 // GetRowHeight provides a function to get row height by given worksheet name
-// and row index. For example, get the height of the first row in Sheet1:
+// and row number. For example, get the height of the first row in Sheet1:
 //
 //    height, err := f.GetRowHeight("Sheet1", 1)
 //
@@ -316,6 +326,9 @@ func (f *File) sharedStringsReader() *xlsxSST {
 		if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(ss))).
 			Decode(&sharedStrings); err != nil && err != io.EOF {
 			log.Printf("xml decode error: %s", err)
+		}
+		if sharedStrings.Count == 0 {
+			sharedStrings.Count = len(sharedStrings.SI)
 		}
 		if sharedStrings.UniqueCount == 0 {
 			sharedStrings.UniqueCount = sharedStrings.Count
@@ -365,7 +378,7 @@ func (c *xlsxC) getValueFrom(f *File, d *xlsxSST) (string, error) {
 		return f.formattedValue(c.S, c.V), nil
 	default:
 		isNum, precision := isNumeric(c.V)
-		if isNum && precision > 15 {
+		if isNum && precision > 10 {
 			val, _ := roundPrecision(c.V)
 			if val != c.V {
 				return f.formattedValue(c.S, val), nil
@@ -436,7 +449,7 @@ func (f *File) SetRowOutlineLevel(sheet string, row int, level uint8) error {
 		return newInvalidRowNumberError(row)
 	}
 	if level > 7 || level < 1 {
-		return errors.New("invalid outline level")
+		return ErrOutlineLevel
 	}
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {

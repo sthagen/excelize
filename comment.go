@@ -39,12 +39,19 @@ func parseFormatCommentsSet(formatSet string) (*formatComment, error) {
 func (f *File) GetComments() (comments map[string][]Comment) {
 	comments = map[string][]Comment{}
 	for n, path := range f.sheetMap {
-		if d := f.commentsReader("xl" + strings.TrimPrefix(f.getSheetComments(filepath.Base(path)), "..")); d != nil {
+		target := f.getSheetComments(filepath.Base(path))
+		if target == "" {
+			continue
+		}
+		if !strings.HasPrefix(target, "/") {
+			target = "xl" + strings.TrimPrefix(target, "..")
+		}
+		if d := f.commentsReader(strings.TrimPrefix(target, "/")); d != nil {
 			sheetComments := []Comment{}
 			for _, comment := range d.CommentList.Comment {
 				sheetComment := Comment{}
-				if comment.AuthorID < len(d.Authors) {
-					sheetComment.Author = d.Authors[comment.AuthorID].Author
+				if comment.AuthorID < len(d.Authors.Author) {
+					sheetComment.Author = d.Authors.Author[comment.AuthorID]
 				}
 				sheetComment.Ref = comment.Ref
 				sheetComment.AuthorID = comment.AuthorID
@@ -69,6 +76,8 @@ func (f *File) GetComments() (comments map[string][]Comment) {
 func (f *File) getSheetComments(sheetFile string) string {
 	var rels = "xl/worksheets/_rels/" + sheetFile + ".rels"
 	if sheetRels := f.relsReader(rels); sheetRels != nil {
+		sheetRels.Lock()
+		defer sheetRels.Unlock()
 		for _, v := range sheetRels.Relationships {
 			if v.Type == SourceRelationshipComments {
 				return v.Target
@@ -243,20 +252,19 @@ func (f *File) addComment(commentsXML, cell string, formatSet *formatComment) {
 		t = t[0:32512]
 	}
 	comments := f.commentsReader(commentsXML)
+	authorID := 0
 	if comments == nil {
-		comments = &xlsxComments{
-			Authors: []xlsxAuthor{
-				{
-					Author: formatSet.Author,
-				},
-			},
-		}
+		comments = &xlsxComments{Authors: xlsxAuthor{Author: []string{formatSet.Author}}}
+	}
+	if inStrSlice(comments.Authors.Author, formatSet.Author) == -1 {
+		comments.Authors.Author = append(comments.Authors.Author, formatSet.Author)
+		authorID = len(comments.Authors.Author) - 1
 	}
 	defaultFont := f.GetDefaultFont()
 	bold := ""
 	cmt := xlsxComment{
 		Ref:      cell,
-		AuthorID: 0,
+		AuthorID: authorID,
 		Text: xlsxText{
 			R: []xlsxR{
 				{
@@ -293,11 +301,12 @@ func (f *File) addComment(commentsXML, cell string, formatSet *formatComment) {
 // the folder xl.
 func (f *File) countComments() int {
 	c1, c2 := 0, 0
-	for k := range f.XLSX {
-		if strings.Contains(k, "xl/comments") {
+	f.Pkg.Range(func(k, v interface{}) bool {
+		if strings.Contains(k.(string), "xl/comments") {
 			c1++
 		}
-	}
+		return true
+	})
 	for rel := range f.Comments {
 		if strings.Contains(rel, "xl/comments") {
 			c2++
@@ -315,10 +324,10 @@ func (f *File) decodeVMLDrawingReader(path string) *decodeVmlDrawing {
 	var err error
 
 	if f.DecodeVMLDrawing[path] == nil {
-		c, ok := f.XLSX[path]
-		if ok {
+		c, ok := f.Pkg.Load(path)
+		if ok && c != nil {
 			f.DecodeVMLDrawing[path] = new(decodeVmlDrawing)
-			if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(c))).
+			if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(c.([]byte)))).
 				Decode(f.DecodeVMLDrawing[path]); err != nil && err != io.EOF {
 				log.Printf("xml decode error: %s", err)
 			}
@@ -333,7 +342,7 @@ func (f *File) vmlDrawingWriter() {
 	for path, vml := range f.VMLDrawing {
 		if vml != nil {
 			v, _ := xml.Marshal(vml)
-			f.XLSX[path] = v
+			f.Pkg.Store(path, v)
 		}
 	}
 }
@@ -342,12 +351,11 @@ func (f *File) vmlDrawingWriter() {
 // after deserialization of xl/comments%d.xml.
 func (f *File) commentsReader(path string) *xlsxComments {
 	var err error
-
 	if f.Comments[path] == nil {
-		content, ok := f.XLSX[path]
-		if ok {
+		content, ok := f.Pkg.Load(path)
+		if ok && content != nil {
 			f.Comments[path] = new(xlsxComments)
-			if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(content))).
+			if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(content.([]byte)))).
 				Decode(f.Comments[path]); err != nil && err != io.EOF {
 				log.Printf("xml decode error: %s", err)
 			}

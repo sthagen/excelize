@@ -65,10 +65,10 @@ func TestChartSize(t *testing.T) {
 		anchor  decodeTwoCellAnchor
 	)
 
-	content, ok := newFile.XLSX["xl/drawings/drawing1.xml"]
+	content, ok := newFile.Pkg.Load("xl/drawings/drawing1.xml")
 	assert.True(t, ok, "Can't open the chart")
 
-	err = xml.Unmarshal([]byte(content), &workdir)
+	err = xml.Unmarshal(content.([]byte), &workdir)
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -232,7 +232,7 @@ func TestAddChartSheet(t *testing.T) {
 	// Test cell value on chartsheet
 	assert.EqualError(t, f.SetCellValue("Chart1", "A1", true), "sheet Chart1 is chart sheet")
 	// Test add chartsheet on already existing name sheet
-	assert.EqualError(t, f.AddChartSheet("Sheet1", `{"type":"col3DClustered","series":[{"name":"Sheet1!$A$2","categories":"Sheet1!$B$1:$D$1","values":"Sheet1!$B$2:$D$2"},{"name":"Sheet1!$A$3","categories":"Sheet1!$B$1:$D$1","values":"Sheet1!$B$3:$D$3"},{"name":"Sheet1!$A$4","categories":"Sheet1!$B$1:$D$1","values":"Sheet1!$B$4:$D$4"}],"title":{"name":"Fruit 3D Clustered Column Chart"}}`), "the same name worksheet already exists")
+	assert.EqualError(t, f.AddChartSheet("Sheet1", `{"type":"col3DClustered","series":[{"name":"Sheet1!$A$2","categories":"Sheet1!$B$1:$D$1","values":"Sheet1!$B$2:$D$2"},{"name":"Sheet1!$A$3","categories":"Sheet1!$B$1:$D$1","values":"Sheet1!$B$3:$D$3"},{"name":"Sheet1!$A$4","categories":"Sheet1!$B$1:$D$1","values":"Sheet1!$B$4:$D$4"}],"title":{"name":"Fruit 3D Clustered Column Chart"}}`), ErrExistsWorksheet.Error())
 	// Test with unsupported chart type
 	assert.EqualError(t, f.AddChartSheet("Chart2", `{"type":"unknown","series":[{"name":"Sheet1!$A$2","categories":"Sheet1!$B$1:$D$1","values":"Sheet1!$B$2:$D$2"},{"name":"Sheet1!$A$3","categories":"Sheet1!$B$1:$D$1","values":"Sheet1!$B$3:$D$3"},{"name":"Sheet1!$A$4","categories":"Sheet1!$B$1:$D$1","values":"Sheet1!$B$4:$D$4"}],"title":{"name":"Fruit 3D Clustered Column Chart"}}`), "unsupported chart type unknown")
 
@@ -340,11 +340,15 @@ func TestChartWithLogarithmicBase(t *testing.T) {
 	type xmlChartContent []byte
 	xmlCharts := make([]xmlChartContent, expectedChartsCount)
 	expectedChartsLogBase := []float64{0, 10.5, 0, 2, 0, 1000}
-	var ok bool
-
+	var (
+		drawingML interface{}
+		ok        bool
+	)
 	for i := 0; i < expectedChartsCount; i++ {
 		chartPath := fmt.Sprintf("xl/charts/chart%d.xml", i+1)
-		xmlCharts[i], ok = newFile.XLSX[chartPath]
+		if drawingML, ok = newFile.Pkg.Load(chartPath); ok {
+			xmlCharts[i] = drawingML.([]byte)
+		}
 		assert.True(t, ok, "Can't open the %s", chartPath)
 
 		err = xml.Unmarshal([]byte(xmlCharts[i]), &chartSpaces[i])

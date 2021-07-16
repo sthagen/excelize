@@ -26,20 +26,25 @@ import (
 
 // StreamWriter defined the type of stream writer.
 type StreamWriter struct {
-	File       *File
-	Sheet      string
-	SheetID    int
-	worksheet  *xlsxWorksheet
-	rawData    bufferedWriter
-	tableParts string
+	File            *File
+	Sheet           string
+	SheetID         int
+	sheetWritten    bool
+	cols            string
+	worksheet       *xlsxWorksheet
+	rawData         bufferedWriter
+	mergeCellsCount int
+	mergeCells      string
+	tableParts      string
 }
 
 // NewStreamWriter return stream writer struct by given worksheet name for
 // generate new worksheet with large amounts of data. Note that after set
 // rows, you must call the 'Flush' method to end the streaming writing
 // process and ensure that the order of line numbers is ascending, the common
-// API and stream API can't be work mixed to writing data on the worksheets.
-// For example, set data for worksheet of size 102400 rows x 50 columns with
+// API and stream API can't be work mixed to writing data on the worksheets,
+// you can't get cell value when in-memory chunks data over 16MB. For
+// example, set data for worksheet of size 102400 rows x 50 columns with
 // numbers and style:
 //
 //    file := excelize.NewFile()
@@ -94,22 +99,21 @@ func (f *File) NewStreamWriter(sheet string) (*StreamWriter, error) {
 		return nil, err
 	}
 
-	sheetXML := fmt.Sprintf("xl/worksheets/sheet%d.xml", sw.SheetID)
+	sheetPath := f.sheetMap[trimSheetName(sheet)]
 	if f.streams == nil {
 		f.streams = make(map[string]*StreamWriter)
 	}
-	f.streams[sheetXML] = sw
+	f.streams[sheetPath] = sw
 
 	_, _ = sw.rawData.WriteString(XMLHeader + `<worksheet` + templateNamespaceIDMap)
-	bulkAppendFields(&sw.rawData, sw.worksheet, 2, 6)
-	_, _ = sw.rawData.WriteString(`<sheetData>`)
+	bulkAppendFields(&sw.rawData, sw.worksheet, 2, 5)
 	return sw, err
 }
 
 // AddTable creates an Excel table for the StreamWriter using the given
 // coordinate area and format set. For example, create a table of A1:D5:
 //
-//    err := sw.AddTable("A1", "D5", ``)
+//    err := sw.AddTable("A1", "D5", "")
 //
 // Create a table of F2:H6 with format set:
 //
@@ -295,7 +299,13 @@ func (sw *StreamWriter) SetRow(axis string, values []interface{}) error {
 	if err != nil {
 		return err
 	}
-
+	if !sw.sheetWritten {
+		if len(sw.cols) > 0 {
+			_, _ = sw.rawData.WriteString("<cols>" + sw.cols + "</cols>")
+		}
+		_, _ = sw.rawData.WriteString(`<sheetData>`)
+		sw.sheetWritten = true
+	}
 	fmt.Fprintf(&sw.rawData, `<row r="%d">`, row)
 	for i, val := range values {
 		axis, err := CoordinatesToCellName(col+i, row)
@@ -320,6 +330,46 @@ func (sw *StreamWriter) SetRow(axis string, values []interface{}) error {
 	}
 	_, _ = sw.rawData.WriteString(`</row>`)
 	return sw.rawData.Sync()
+}
+
+// SetColWidth provides a function to set the width of a single column or
+// multiple columns for the StreamWriter. Note that you must call
+// the 'SetColWidth' function before the 'SetRow' function. For example set
+// the width column B:C as 20:
+//
+//    err := streamWriter.SetColWidth(2, 3, 20)
+//
+func (sw *StreamWriter) SetColWidth(min, max int, width float64) error {
+	if sw.sheetWritten {
+		return ErrStreamSetColWidth
+	}
+	if min > TotalColumns || max > TotalColumns {
+		return ErrColumnNumber
+	}
+	if min < 1 || max < 1 {
+		return ErrColumnNumber
+	}
+	if width > MaxColumnWidth {
+		return ErrColumnWidth
+	}
+	if min > max {
+		min, max = max, min
+	}
+	sw.cols += fmt.Sprintf(`<col min="%d" max="%d" width="%f" customWidth="1"/>`, min, max, width)
+	return nil
+}
+
+// MergeCell provides a function to merge cells by a given coordinate area for
+// the StreamWriter. Don't create a merged cell that overlaps with another
+// existing merged cell.
+func (sw *StreamWriter) MergeCell(hcell, vcell string) error {
+	_, err := areaRangeToCoordinates(hcell, vcell)
+	if err != nil {
+		return err
+	}
+	sw.mergeCellsCount++
+	sw.mergeCells += fmt.Sprintf(`<mergeCell ref="%s:%s"/>`, hcell, vcell)
+	return nil
 }
 
 // setCellFormula provides a function to set formula of a cell.
@@ -412,8 +462,17 @@ func writeCell(buf *bufferedWriter, c xlsxC) {
 
 // Flush ending the streaming writing process.
 func (sw *StreamWriter) Flush() error {
+	if !sw.sheetWritten {
+		_, _ = sw.rawData.WriteString(`<sheetData>`)
+		sw.sheetWritten = true
+	}
 	_, _ = sw.rawData.WriteString(`</sheetData>`)
-	bulkAppendFields(&sw.rawData, sw.worksheet, 8, 38)
+	bulkAppendFields(&sw.rawData, sw.worksheet, 8, 15)
+	if sw.mergeCellsCount > 0 {
+		sw.mergeCells = fmt.Sprintf(`<mergeCells count="%d">%s</mergeCells>`, sw.mergeCellsCount, sw.mergeCells)
+	}
+	_, _ = sw.rawData.WriteString(sw.mergeCells)
+	bulkAppendFields(&sw.rawData, sw.worksheet, 17, 38)
 	_, _ = sw.rawData.WriteString(sw.tableParts)
 	bulkAppendFields(&sw.rawData, sw.worksheet, 40, 40)
 	_, _ = sw.rawData.WriteString(`</worksheet>`)
@@ -421,10 +480,10 @@ func (sw *StreamWriter) Flush() error {
 		return err
 	}
 
-	sheetXML := fmt.Sprintf("xl/worksheets/sheet%d.xml", sw.SheetID)
-	delete(sw.File.Sheet, sheetXML)
-	delete(sw.File.checked, sheetXML)
-	delete(sw.File.XLSX, sheetXML)
+	sheetPath := sw.File.sheetMap[trimSheetName(sw.Sheet)]
+	sw.File.Sheet.Delete(sheetPath)
+	delete(sw.File.checked, sheetPath)
+	sw.File.Pkg.Delete(sheetPath)
 
 	return nil
 }
@@ -480,8 +539,7 @@ func (bw *bufferedWriter) Reader() (io.Reader, error) {
 // buffer has grown large enough. Any error will be returned.
 func (bw *bufferedWriter) Sync() (err error) {
 	// Try to use local storage
-	const chunk = 1 << 24
-	if bw.buf.Len() < chunk {
+	if bw.buf.Len() < StreamChunkSize {
 		return nil
 	}
 	if bw.tmp == nil {

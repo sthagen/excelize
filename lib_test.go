@@ -73,7 +73,7 @@ func TestColumnNameToNumber_Error(t *testing.T) {
 		}
 	}
 	_, err := ColumnNameToNumber("XFE")
-	assert.EqualError(t, err, "column number exceeds maximum limit")
+	assert.EqualError(t, err, ErrColumnNumber.Error())
 }
 
 func TestColumnNumberToName_OK(t *testing.T) {
@@ -98,7 +98,7 @@ func TestColumnNumberToName_Error(t *testing.T) {
 	}
 
 	_, err = ColumnNumberToName(TotalColumns + 1)
-	assert.EqualError(t, err, "column number exceeds maximum limit")
+	assert.EqualError(t, err, ErrColumnNumber.Error())
 }
 
 func TestSplitCellName_OK(t *testing.T) {
@@ -227,4 +227,47 @@ func TestStack(t *testing.T) {
 	s := NewStack()
 	assert.Equal(t, s.Peek(), nil)
 	assert.Equal(t, s.Pop(), nil)
+}
+
+func TestGenXMLNamespace(t *testing.T) {
+	assert.Equal(t, genXMLNamespace([]xml.Attr{
+		{Name: xml.Name{Space: NameSpaceXML, Local: "space"}, Value: "preserve"},
+	}), `xml:space="preserve">`)
+}
+
+func TestBstrUnmarshal(t *testing.T) {
+	bstrs := map[string]string{
+		"*":                           "*",
+		"*_x0000_":                    "*",
+		"*_x0008_":                    "*",
+		"_x0008_*":                    "*",
+		"*_x0008_*":                   "**",
+		"*_x4F60__x597D_":             "*你好",
+		"*_xG000_":                    "*_xG000_",
+		"*_xG05F_x0001_*":             "*_xG05F*",
+		"*_x005F__x0008_*":            "*_x005F_*",
+		"*_x005F_x0001_*":             "*_x0001_*",
+		"*_x005f_x005F__x0008_*":      "*_x005F_*",
+		"*_x005F_x005F_xG05F_x0006_*": "*_x005F_xG05F*",
+		"*_x005F_x005F_x005F_x0006_*": "*_x005F_x0006_*",
+		"_x005F__x0008_******":        "_x005F_******",
+		"******_x005F__x0008_":        "******_x005F_",
+		"******_x005F__x0008_******":  "******_x005F_******",
+	}
+	for bstr, expected := range bstrs {
+		assert.Equal(t, expected, bstrUnmarshal(bstr))
+	}
+}
+
+func TestBstrMarshal(t *testing.T) {
+	bstrs := map[string]string{
+		"*_xG05F_*":       "*_xG05F_*",
+		"*_x0008_*":       "*_x005F_x0008_*",
+		"*_x005F_*":       "*_x005F_x005F_*",
+		"*_x005F_xG006_*": "*_x005F_x005F_xG006_*",
+		"*_x005F_x0006_*": "*_x005F_x005F_x005F_x0006_*",
+	}
+	for bstr, expected := range bstrs {
+		assert.Equal(t, expected, bstrMarshal(bstr))
+	}
 }

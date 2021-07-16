@@ -18,8 +18,10 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // ReadZipReader can be used to read the spreadsheet in memory without touching the
@@ -49,8 +51,8 @@ func ReadZipReader(r *zip.Reader) (map[string][]byte, int, error) {
 
 // readXML provides a function to read XML content as string.
 func (f *File) readXML(name string) []byte {
-	if content, ok := f.XLSX[name]; ok {
-		return content
+	if content, _ := f.Pkg.Load(name); content != nil {
+		return content.([]byte)
 	}
 	if content, ok := f.streams[name]; ok {
 		return content.rawData.buf.Bytes()
@@ -64,7 +66,7 @@ func (f *File) saveFileList(name string, content []byte) {
 	newContent := make([]byte, 0, len(XMLHeader)+len(content))
 	newContent = append(newContent, []byte(XMLHeader)...)
 	newContent = append(newContent, content...)
-	f.XLSX[name] = newContent
+	f.Pkg.Store(name, newContent)
 }
 
 // Read file content as string in a archive file.
@@ -149,7 +151,7 @@ func ColumnNameToNumber(name string) (int, error) {
 		multi *= 26
 	}
 	if col > TotalColumns {
-		return -1, fmt.Errorf("column number exceeds maximum limit")
+		return -1, ErrColumnNumber
 	}
 	return col, nil
 }
@@ -166,7 +168,7 @@ func ColumnNumberToName(num int) (string, error) {
 		return "", fmt.Errorf("incorrect column number %d", num)
 	}
 	if num > TotalColumns {
-		return "", fmt.Errorf("column number exceeds maximum limit")
+		return "", ErrColumnNumber
 	}
 	var col string
 	for num > 0 {
@@ -349,6 +351,9 @@ func genXMLNamespace(attr []xml.Attr) string {
 	var rootElement string
 	for _, v := range attr {
 		if lastSpace := getXMLNamespace(v.Name.Space, attr); lastSpace != "" {
+			if lastSpace == NameSpaceXML {
+				lastSpace = "xml"
+			}
 			rootElement += fmt.Sprintf("%s:%s=\"%s\" ", lastSpace, v.Name.Local, v.Value)
 			continue
 		}
@@ -449,6 +454,100 @@ func isNumeric(s string) (bool, int) {
 		}
 	}
 	return true, p
+}
+
+var (
+	bstrExp       = regexp.MustCompile(`_x[a-zA-Z\d]{4}_`)
+	bstrEscapeExp = regexp.MustCompile(`x[a-zA-Z\d]{4}_`)
+)
+
+// bstrUnmarshal parses the binary basic string, this will trim escaped string
+// literal which not permitted in an XML 1.0 document. The basic string
+// variant type can store any valid Unicode character. Unicode characters
+// that cannot be directly represented in XML as defined by the XML 1.0
+// specification, shall be escaped using the Unicode numerical character
+// representation escape character format _xHHHH_, where H represents a
+// hexadecimal character in the character's value. For example: The Unicode
+// character 8 is not permitted in an XML 1.0 document, so it shall be
+// escaped as _x0008_. To store the literal form of an escape sequence, the
+// initial underscore shall itself be escaped (i.e. stored as _x005F_). For
+// example: The string literal _x0008_ would be stored as _x005F_x0008_.
+func bstrUnmarshal(s string) (result string) {
+	matches, l, cursor := bstrExp.FindAllStringSubmatchIndex(s, -1), len(s), 0
+	for _, match := range matches {
+		result += s[cursor:match[0]]
+		subStr := s[match[0]:match[1]]
+		if subStr == "_x005F_" {
+			cursor = match[1]
+			if l > match[1]+6 && !bstrEscapeExp.MatchString(s[match[1]:match[1]+6]) {
+				result += subStr
+				continue
+			}
+			result += "_"
+			continue
+		}
+		if bstrExp.MatchString(subStr) {
+			cursor = match[1]
+			v, err := strconv.Unquote(`"\u` + s[match[0]+2:match[1]-1] + `"`)
+			if err != nil {
+				if l > match[1]+6 && bstrEscapeExp.MatchString(s[match[1]:match[1]+6]) {
+					result += subStr[:6]
+					cursor = match[1] + 6
+					continue
+				}
+				result += subStr
+				continue
+			}
+			hasRune := false
+			for _, c := range v {
+				if unicode.IsControl(c) {
+					hasRune = true
+				}
+			}
+			if !hasRune {
+				result += v
+			}
+		}
+	}
+	if cursor < l {
+		result += s[cursor:]
+	}
+	return result
+}
+
+// bstrMarshal encode the escaped string literal which not permitted in an XML
+// 1.0 document.
+func bstrMarshal(s string) (result string) {
+	matches, l, cursor := bstrExp.FindAllStringSubmatchIndex(s, -1), len(s), 0
+	for _, match := range matches {
+		result += s[cursor:match[0]]
+		subStr := s[match[0]:match[1]]
+		if subStr == "_x005F_" {
+			cursor = match[1]
+			if match[1]+6 <= l && bstrEscapeExp.MatchString(s[match[1]:match[1]+6]) {
+				_, err := strconv.Unquote(`"\u` + s[match[1]+1:match[1]+5] + `"`)
+				if err == nil {
+					result += subStr + "x005F" + subStr
+					continue
+				}
+			}
+			result += subStr + "x005F_"
+			continue
+		}
+		if bstrExp.MatchString(subStr) {
+			cursor = match[1]
+			_, err := strconv.Unquote(`"\u` + s[match[0]+2:match[1]-1] + `"`)
+			if err == nil {
+				result += "_x005F" + subStr
+				continue
+			}
+			result += subStr
+		}
+	}
+	if cursor < l {
+		result += s[cursor:]
+	}
+	return result
 }
 
 // Stack defined an abstract data type that serves as a collection of elements.

@@ -14,7 +14,6 @@ package excelize
 import (
 	"bytes"
 	"encoding/xml"
-	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -200,8 +199,11 @@ func (f *File) Cols(sheet string) (*Cols, error) {
 	if !ok {
 		return nil, ErrSheetNotExist{sheet}
 	}
-	if f.Sheet[name] != nil {
-		output, _ := xml.Marshal(f.Sheet[name])
+	if ws, ok := f.Sheet.Load(name); ok && ws != nil {
+		worksheet := ws.(*xlsxWorksheet)
+		worksheet.Lock()
+		defer worksheet.Unlock()
+		output, _ := xml.Marshal(worksheet)
 		f.saveFileList(name, f.replaceNameSpaceBytes(name, output))
 	}
 	var colIterator columnXMLIterator
@@ -360,7 +362,7 @@ func (f *File) parseColRange(columns string) (start, end int, err error) {
 //
 func (f *File) SetColOutlineLevel(sheet, col string, level uint8) error {
 	if level > 7 || level < 1 {
-		return errors.New("invalid outline level")
+		return ErrOutlineLevel
 	}
 	colNum, err := ColumnNameToNumber(col)
 	if err != nil {
@@ -433,6 +435,13 @@ func (f *File) SetColStyle(sheet, columns string, styleID int) error {
 		fc.Width = c.Width
 		return fc
 	})
+	if rows := len(ws.SheetData.Row); rows > 0 {
+		for col := start; col <= end; col++ {
+			from, _ := CoordinatesToCellName(col, 1)
+			to, _ := CoordinatesToCellName(col, rows)
+			f.SetCellStyle(sheet, from, to, styleID)
+		}
+	}
 	return nil
 }
 
@@ -452,7 +461,7 @@ func (f *File) SetColWidth(sheet, startcol, endcol string, width float64) error 
 		return err
 	}
 	if width > MaxColumnWidth {
-		return errors.New("the width of the column must be smaller than or equal to 255 characters")
+		return ErrColumnWidth
 	}
 	if min > max {
 		min, max = max, min
@@ -593,9 +602,9 @@ func (f *File) positionObjectPixels(sheet string, col, row, x1, y1, width, heigh
 	}
 
 	// Subtract the underlying cell heights to find end cell of the object.
-	for height >= f.getRowHeight(sheet, rowEnd) {
-		height -= f.getRowHeight(sheet, rowEnd)
+	for height >= f.getRowHeight(sheet, rowEnd+1) {
 		rowEnd++
+		height -= f.getRowHeight(sheet, rowEnd)
 	}
 
 	// The end vertices are whatever is left from the width and height.
@@ -605,7 +614,7 @@ func (f *File) positionObjectPixels(sheet string, col, row, x1, y1, width, heigh
 }
 
 // getColWidth provides a function to get column width in pixels by given
-// sheet name and column index.
+// sheet name and column number.
 func (f *File) getColWidth(sheet string, col int) int {
 	xlsx, _ := f.workSheetReader(sheet)
 	if xlsx.Cols != nil {
@@ -624,7 +633,7 @@ func (f *File) getColWidth(sheet string, col int) int {
 }
 
 // GetColWidth provides a function to get column width by given worksheet name
-// and column index.
+// and column name.
 func (f *File) GetColWidth(sheet, col string) (float64, error) {
 	colNum, err := ColumnNameToNumber(col)
 	if err != nil {

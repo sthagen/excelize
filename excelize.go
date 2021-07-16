@@ -16,7 +16,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -40,19 +39,19 @@ type File struct {
 	CalcChain        *xlsxCalcChain
 	Comments         map[string]*xlsxComments
 	ContentTypes     *xlsxTypes
-	Drawings         map[string]*xlsxWsDr
+	Drawings         sync.Map
 	Path             string
 	SharedStrings    *xlsxSST
 	sharedStringsMap map[string]int
-	Sheet            map[string]*xlsxWorksheet
+	Sheet            sync.Map
 	SheetCount       int
 	Styles           *xlsxStyleSheet
 	Theme            *xlsxTheme
 	DecodeVMLDrawing map[string]*decodeVmlDrawing
 	VMLDrawing       map[string]*vmlDrawing
 	WorkBook         *xlsxWorkbook
-	Relationships    map[string]*xlsxRelationships
-	XLSX             map[string][]byte
+	Relationships    sync.Map
+	Pkg              sync.Map
 	CharsetReader    charsetTranscoderFn
 }
 
@@ -94,12 +93,12 @@ func newFile() *File {
 		checked:          make(map[string]bool),
 		sheetMap:         make(map[string]string),
 		Comments:         make(map[string]*xlsxComments),
-		Drawings:         make(map[string]*xlsxWsDr),
+		Drawings:         sync.Map{},
 		sharedStringsMap: make(map[string]int),
-		Sheet:            make(map[string]*xlsxWorksheet),
+		Sheet:            sync.Map{},
 		DecodeVMLDrawing: make(map[string]*decodeVmlDrawing),
 		VMLDrawing:       make(map[string]*vmlDrawing),
-		Relationships:    make(map[string]*xlsxRelationships),
+		Relationships:    sync.Map{},
 		CharsetReader:    charset.NewReaderLabel,
 	}
 }
@@ -130,7 +129,10 @@ func OpenReader(r io.Reader, opt ...Options) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.SheetCount, f.XLSX = sheetCount, file
+	f.SheetCount = sheetCount
+	for k, v := range file {
+		f.Pkg.Store(k, v)
+	}
 	f.CalcChain = f.calcChainReader()
 	f.sheetMap = f.getSheetMap()
 	f.Styles = f.stylesReader()
@@ -173,40 +175,40 @@ func (f *File) workSheetReader(sheet string) (ws *xlsxWorksheet, err error) {
 		name string
 		ok   bool
 	)
-
 	if name, ok = f.sheetMap[trimSheetName(sheet)]; !ok {
 		err = fmt.Errorf("sheet %s is not exist", sheet)
 		return
 	}
-	if ws = f.Sheet[name]; f.Sheet[name] == nil {
-		if strings.HasPrefix(name, "xl/chartsheets") {
-			err = fmt.Errorf("sheet %s is chart sheet", sheet)
-			return
-		}
-		ws = new(xlsxWorksheet)
-		if _, ok := f.xmlAttr[name]; !ok {
-			d := f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML(name))))
-			f.xmlAttr[name] = append(f.xmlAttr[name], getRootElement(d)...)
-		}
-		if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML(name)))).
-			Decode(ws); err != nil && err != io.EOF {
-			err = fmt.Errorf("xml decode error: %s", err)
-			return
-		}
-		err = nil
-		if f.checked == nil {
-			f.checked = make(map[string]bool)
-		}
-		if ok = f.checked[name]; !ok {
-			checkSheet(ws)
-			if err = checkRow(ws); err != nil {
-				return
-			}
-			f.checked[name] = true
-		}
-		f.Sheet[name] = ws
+	if worksheet, ok := f.Sheet.Load(name); ok && worksheet != nil {
+		ws = worksheet.(*xlsxWorksheet)
+		return
 	}
-
+	if strings.HasPrefix(name, "xl/chartsheets") {
+		err = fmt.Errorf("sheet %s is chart sheet", sheet)
+		return
+	}
+	ws = new(xlsxWorksheet)
+	if _, ok := f.xmlAttr[name]; !ok {
+		d := f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML(name))))
+		f.xmlAttr[name] = append(f.xmlAttr[name], getRootElement(d)...)
+	}
+	if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML(name)))).
+		Decode(ws); err != nil && err != io.EOF {
+		err = fmt.Errorf("xml decode error: %s", err)
+		return
+	}
+	err = nil
+	if f.checked == nil {
+		f.checked = make(map[string]bool)
+	}
+	if ok = f.checked[name]; !ok {
+		checkSheet(ws)
+		if err = checkRow(ws); err != nil {
+			return
+		}
+		f.checked[name] = true
+	}
+	f.Sheet.Store(name, ws)
 	return
 }
 
@@ -255,6 +257,8 @@ func (f *File) addRels(relPath, relType, target, targetMode string) int {
 	if rels == nil {
 		rels = &xlsxRelationships{}
 	}
+	rels.Lock()
+	defer rels.Unlock()
 	var rID int
 	for idx, rel := range rels.Relationships {
 		ID, _ := strconv.Atoi(strings.TrimPrefix(rel.ID, "rId"))
@@ -278,7 +282,7 @@ func (f *File) addRels(relPath, relType, target, targetMode string) int {
 		Target:     target,
 		TargetMode: targetMode,
 	})
-	f.Relationships[relPath] = rels
+	f.Relationships.Store(relPath, rels)
 	return rID
 }
 
@@ -351,10 +355,12 @@ func (f *File) AddVBAProject(bin string) error {
 		return fmt.Errorf("stat %s: no such file or directory", bin)
 	}
 	if path.Ext(bin) != ".bin" {
-		return errors.New("unsupported VBA project extension")
+		return ErrAddVBAProject
 	}
 	f.setContentTypePartVBAProjectExtensions()
 	wb := f.relsReader(f.getWorkbookRelsPath())
+	wb.Lock()
+	defer wb.Unlock()
 	var rID int
 	var ok bool
 	for _, rel := range wb.Relationships {
@@ -376,7 +382,7 @@ func (f *File) AddVBAProject(bin string) error {
 		})
 	}
 	file, _ := ioutil.ReadFile(bin)
-	f.XLSX["xl/vbaProject.bin"] = file
+	f.Pkg.Store("xl/vbaProject.bin", file)
 	return err
 }
 
@@ -385,6 +391,8 @@ func (f *File) AddVBAProject(bin string) error {
 func (f *File) setContentTypePartVBAProjectExtensions() {
 	var ok bool
 	content := f.contentTypesReader()
+	content.Lock()
+	defer content.Unlock()
 	for _, v := range content.Defaults {
 		if v.Extension == "bin" {
 			ok = true

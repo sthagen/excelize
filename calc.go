@@ -232,6 +232,8 @@ var tokenPriority = map[string]int{
 //    BASE
 //    BESSELI
 //    BESSELJ
+//    BESSELK
+//    BESSELY
 //    BIN2DEC
 //    BIN2HEX
 //    BIN2OCT
@@ -588,6 +590,10 @@ func (f *File) evalInfixExp(sheet, cell string, tokens []efp.Token) (efp.Token, 
 				}
 				if nextToken.TType == efp.TokenTypeArgument || nextToken.TType == efp.TokenTypeFunction {
 					// parse reference: reference or range at here
+					refTo := f.getDefinedNameRefTo(token.TValue, sheet)
+					if refTo != "" {
+						token.TValue = refTo
+					}
 					result, err := f.parseReference(sheet, token.TValue)
 					if err != nil {
 						return efp.Token{TValue: formulaErrorNAME}, err
@@ -622,16 +628,10 @@ func (f *File) evalInfixExp(sheet, cell string, tokens []efp.Token) (efp.Token, 
 			}
 
 			// current token is logical
-			if token.TType == efp.OperatorsInfix && token.TSubType == efp.TokenSubTypeLogical {
-			}
 			if token.TType == efp.TokenTypeOperand && token.TSubType == efp.TokenSubTypeLogical {
 				argsStack.Peek().(*list.List).PushBack(newStringFormulaArg(token.TValue))
 			}
 
-			// current token is text
-			if token.TType == efp.TokenTypeOperand && token.TSubType == efp.TokenSubTypeText {
-				argsStack.Peek().(*list.List).PushBack(newStringFormulaArg(token.TValue))
-			}
 			if err = f.evalInfixExpFunc(sheet, cell, token, nextToken, opfStack, opdStack, opftStack, opfdStack, argsStack); err != nil {
 				return efp.Token{}, err
 			}
@@ -645,7 +645,7 @@ func (f *File) evalInfixExp(sheet, cell string, tokens []efp.Token) (efp.Token, 
 		optStack.Pop()
 	}
 	if opdStack.Len() == 0 {
-		return efp.Token{}, errors.New("formula not valid")
+		return efp.Token{}, ErrInvalidFormula
 	}
 	return opdStack.Peek().(efp.Token), err
 }
@@ -847,7 +847,7 @@ func calcDiv(rOpd, lOpd string, opdStack *Stack) error {
 func calculate(opdStack *Stack, opt efp.Token) error {
 	if opt.TValue == "-" && opt.TType == efp.TokenTypeOperatorPrefix {
 		if opdStack.Len() < 1 {
-			return errors.New("formula not valid")
+			return ErrInvalidFormula
 		}
 		opd := opdStack.Pop().(efp.Token)
 		opdVal, err := strconv.ParseFloat(opd.TValue, 64)
@@ -872,7 +872,7 @@ func calculate(opdStack *Stack, opt efp.Token) error {
 	}
 	if opt.TValue == "-" && opt.TType == efp.TokenTypeOperatorInfix {
 		if opdStack.Len() < 2 {
-			return errors.New("formula not valid")
+			return ErrInvalidFormula
 		}
 		rOpd := opdStack.Pop().(efp.Token)
 		lOpd := opdStack.Pop().(efp.Token)
@@ -883,7 +883,7 @@ func calculate(opdStack *Stack, opt efp.Token) error {
 	fn, ok := tokenCalcFunc[opt.TValue]
 	if ok {
 		if opdStack.Len() < 2 {
-			return errors.New("formula not valid")
+			return ErrInvalidFormula
 		}
 		rOpd := opdStack.Pop().(efp.Token)
 		lOpd := opdStack.Pop().(efp.Token)
@@ -947,24 +947,28 @@ func isEndParenthesesToken(token efp.Token) bool {
 // token.
 func isOperatorPrefixToken(token efp.Token) bool {
 	_, ok := tokenPriority[token.TValue]
-	if (token.TValue == "-" && token.TType == efp.TokenTypeOperatorPrefix) || (ok && token.TType == efp.TokenTypeOperatorInfix) {
-		return true
-	}
-	return false
+	return (token.TValue == "-" && token.TType == efp.TokenTypeOperatorPrefix) || (ok && token.TType == efp.TokenTypeOperatorInfix)
 }
 
 // getDefinedNameRefTo convert defined name to reference range.
 func (f *File) getDefinedNameRefTo(definedNameName string, currentSheet string) (refTo string) {
+	var workbookRefTo, worksheetRefTo string
 	for _, definedName := range f.GetDefinedName() {
 		if definedName.Name == definedNameName {
-			refTo = definedName.RefersTo
 			// worksheet scope takes precedence over scope workbook when both definedNames exist
+			if definedName.Scope == "Workbook" {
+				workbookRefTo = definedName.RefersTo
+			}
 			if definedName.Scope == currentSheet {
-				break
+				worksheetRefTo = definedName.RefersTo
 			}
 		}
 	}
-	return refTo
+	refTo = workbookRefTo
+	if worksheetRefTo != "" {
+		refTo = worksheetRefTo
+	}
+	return
 }
 
 // parseToken parse basic arithmetic operator priority and evaluate based on
@@ -1006,7 +1010,7 @@ func (f *File) parseToken(sheet string, token efp.Token, opdStack, optStack *Sta
 		optStack.Pop()
 	}
 	// opd
-	if token.TType == efp.TokenTypeOperand && token.TSubType == efp.TokenSubTypeNumber {
+	if token.TType == efp.TokenTypeOperand && (token.TSubType == efp.TokenSubTypeNumber || token.TSubType == efp.TokenSubTypeText) {
 		opdStack.Push(token)
 	}
 	return nil
@@ -1332,6 +1336,169 @@ func (fn *formulaFuncs) bassel(argsList *list.List, modfied bool) formulaArg {
 		add = !add
 	}
 	return newNumberFormulaArg(result)
+}
+
+// BESSELK function calculates the modified Bessel functions, Kn(x), which are
+// also known as the hyperbolic Bessel Functions. These are the equivalent of
+// the Bessel functions, evaluated for purely imaginary arguments. The syntax
+// of the function is:
+//
+//    BESSELK(x,n)
+//
+func (fn *formulaFuncs) BESSELK(argsList *list.List) formulaArg {
+	if argsList.Len() != 2 {
+		return newErrorFormulaArg(formulaErrorVALUE, "BESSELK requires 2 numeric arguments")
+	}
+	x, n := argsList.Front().Value.(formulaArg).ToNumber(), argsList.Back().Value.(formulaArg).ToNumber()
+	if x.Type != ArgNumber {
+		return x
+	}
+	if n.Type != ArgNumber {
+		return n
+	}
+	if x.Number <= 0 || n.Number < 0 {
+		return newErrorFormulaArg(formulaErrorNUM, formulaErrorNUM)
+	}
+	var result float64
+	switch math.Floor(n.Number) {
+	case 0:
+		result = fn.besselK0(x)
+	case 1:
+		result = fn.besselK1(x)
+	default:
+		result = fn.besselK2(x, n)
+	}
+	return newNumberFormulaArg(result)
+}
+
+// besselK0 is an implementation of the formula function BESSELK.
+func (fn *formulaFuncs) besselK0(x formulaArg) float64 {
+	var y float64
+	if x.Number <= 2 {
+		n2 := x.Number * 0.5
+		y = n2 * n2
+		args := list.New()
+		args.PushBack(x)
+		args.PushBack(newNumberFormulaArg(0))
+		return -math.Log(n2)*fn.BESSELI(args).Number +
+			(-0.57721566 + y*(0.42278420+y*(0.23069756+y*(0.3488590e-1+y*(0.262698e-2+y*
+				(0.10750e-3+y*0.74e-5))))))
+	}
+	y = 2 / x.Number
+	return math.Exp(-x.Number) / math.Sqrt(x.Number) *
+		(1.25331414 + y*(-0.7832358e-1+y*(0.2189568e-1+y*(-0.1062446e-1+y*
+			(0.587872e-2+y*(-0.251540e-2+y*0.53208e-3))))))
+}
+
+// besselK1 is an implementation of the formula function BESSELK.
+func (fn *formulaFuncs) besselK1(x formulaArg) float64 {
+	var n2, y float64
+	if x.Number <= 2 {
+		n2 = x.Number * 0.5
+		y = n2 * n2
+		args := list.New()
+		args.PushBack(x)
+		args.PushBack(newNumberFormulaArg(1))
+		return math.Log(n2)*fn.BESSELI(args).Number +
+			(1+y*(0.15443144+y*(-0.67278579+y*(-0.18156897+y*(-0.1919402e-1+y*(-0.110404e-2+y*(-0.4686e-4)))))))/x.Number
+	}
+	y = 2 / x.Number
+	return math.Exp(-x.Number) / math.Sqrt(x.Number) *
+		(1.25331414 + y*(0.23498619+y*(-0.3655620e-1+y*(0.1504268e-1+y*(-0.780353e-2+y*
+			(0.325614e-2+y*(-0.68245e-3)))))))
+}
+
+// besselK2 is an implementation of the formula function BESSELK.
+func (fn *formulaFuncs) besselK2(x, n formulaArg) float64 {
+	tox, bkm, bk, bkp := 2/x.Number, fn.besselK0(x), fn.besselK1(x), 0.0
+	for i := 1.0; i < n.Number; i++ {
+		bkp = bkm + i*tox*bk
+		bkm = bk
+		bk = bkp
+	}
+	return bk
+}
+
+// BESSELY function returns the Bessel function, Yn(x), (also known as the
+// Weber function or the Neumann function), for a specified order and value
+// of x. The syntax of the function is:
+//
+//    BESSELY(x,n)
+//
+func (fn *formulaFuncs) BESSELY(argsList *list.List) formulaArg {
+	if argsList.Len() != 2 {
+		return newErrorFormulaArg(formulaErrorVALUE, "BESSELY requires 2 numeric arguments")
+	}
+	x, n := argsList.Front().Value.(formulaArg).ToNumber(), argsList.Back().Value.(formulaArg).ToNumber()
+	if x.Type != ArgNumber {
+		return x
+	}
+	if n.Type != ArgNumber {
+		return n
+	}
+	if x.Number <= 0 || n.Number < 0 {
+		return newErrorFormulaArg(formulaErrorNUM, formulaErrorNUM)
+	}
+	var result float64
+	switch math.Floor(n.Number) {
+	case 0:
+		result = fn.besselY0(x)
+	case 1:
+		result = fn.besselY1(x)
+	default:
+		result = fn.besselY2(x, n)
+	}
+	return newNumberFormulaArg(result)
+}
+
+// besselY0 is an implementation of the formula function BESSELY.
+func (fn *formulaFuncs) besselY0(x formulaArg) float64 {
+	var y float64
+	if x.Number < 8 {
+		y = x.Number * x.Number
+		f1 := -2957821389.0 + y*(7062834065.0+y*(-512359803.6+y*(10879881.29+y*
+			(-86327.92757+y*228.4622733))))
+		f2 := 40076544269.0 + y*(745249964.8+y*(7189466.438+y*
+			(47447.26470+y*(226.1030244+y))))
+		args := list.New()
+		args.PushBack(x)
+		args.PushBack(newNumberFormulaArg(0))
+		return f1/f2 + 0.636619772*fn.BESSELJ(args).Number*math.Log(x.Number)
+	}
+	z := 8.0 / x.Number
+	y = z * z
+	xx := x.Number - 0.785398164
+	f1 := 1 + y*(-0.1098628627e-2+y*(0.2734510407e-4+y*(-0.2073370639e-5+y*0.2093887211e-6)))
+	f2 := -0.1562499995e-1 + y*(0.1430488765e-3+y*(-0.6911147651e-5+y*(0.7621095161e-6+y*
+		(-0.934945152e-7))))
+	return math.Sqrt(0.636619772/x.Number) * (math.Sin(xx)*f1 + z*math.Cos(xx)*f2)
+}
+
+// besselY1 is an implementation of the formula function BESSELY.
+func (fn *formulaFuncs) besselY1(x formulaArg) float64 {
+	if x.Number < 8 {
+		y := x.Number * x.Number
+		f1 := x.Number * (-0.4900604943e13 + y*(0.1275274390e13+y*(-0.5153438139e11+y*
+			(0.7349264551e9+y*(-0.4237922726e7+y*0.8511937935e4)))))
+		f2 := 0.2499580570e14 + y*(0.4244419664e12+y*(0.3733650367e10+y*(0.2245904002e8+y*
+			(0.1020426050e6+y*(0.3549632885e3+y)))))
+		args := list.New()
+		args.PushBack(x)
+		args.PushBack(newNumberFormulaArg(1))
+		return f1/f2 + 0.636619772*(fn.BESSELJ(args).Number*math.Log(x.Number)-1/x.Number)
+	}
+	return math.Sqrt(0.636619772/x.Number) * math.Sin(x.Number-2.356194491)
+}
+
+// besselY2 is an implementation of the formula function BESSELY.
+func (fn *formulaFuncs) besselY2(x, n formulaArg) float64 {
+	tox, bym, by, byp := 2/x.Number, fn.besselY0(x), fn.besselY1(x), 0.0
+	for i := 1.0; i < n.Number; i++ {
+		byp = i*tox*by - bym
+		bym = by
+		by = byp
+	}
+	return by
 }
 
 // BIN2DEC function converts a Binary (a base-2 number) into a decimal number.

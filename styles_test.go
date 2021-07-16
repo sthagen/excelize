@@ -201,7 +201,7 @@ func TestNewStyle(t *testing.T) {
 	_, err = f.NewStyle(&Style{})
 	assert.NoError(t, err)
 	_, err = f.NewStyle(Style{})
-	assert.EqualError(t, err, "invalid parameter type")
+	assert.EqualError(t, err, ErrParameterInvalid.Error())
 
 	_, err = f.NewStyle(&Style{Font: &Font{Family: strings.Repeat("s", MaxFontFamilyLength+1)}})
 	assert.EqualError(t, err, "the length of the font family name must be smaller than or equal to 31")
@@ -261,14 +261,14 @@ func TestStylesReader(t *testing.T) {
 	f := NewFile()
 	// Test read styles with unsupported charset.
 	f.Styles = nil
-	f.XLSX["xl/styles.xml"] = MacintoshCyrillicCharset
+	f.Pkg.Store("xl/styles.xml", MacintoshCyrillicCharset)
 	assert.EqualValues(t, new(xlsxStyleSheet), f.stylesReader())
 }
 
 func TestThemeReader(t *testing.T) {
 	f := NewFile()
 	// Test read theme with unsupported charset.
-	f.XLSX["xl/theme/theme1.xml"] = MacintoshCyrillicCharset
+	f.Pkg.Store("xl/theme/theme1.xml", MacintoshCyrillicCharset)
 	assert.EqualValues(t, new(xlsxTheme), f.themeReader())
 }
 
@@ -293,6 +293,14 @@ func TestParseTime(t *testing.T) {
 	assert.Equal(t, "2019-03-04 05:05:42", parseTime("43528.2123", "YYYY-MM-DD hh:mm:ss"))
 	assert.Equal(t, "2019-03-04 05:05:42", parseTime("43528.2123", "YYYY-MM-DD hh:mm:ss;YYYY-MM-DD hh:mm:ss"))
 	assert.Equal(t, "3/4/2019 5:5:42", parseTime("43528.2123", "M/D/YYYY h:m:s"))
+	assert.Equal(t, "3/4/2019 0:5:42", parseTime("43528.003958333335", "m/d/yyyy h:m:s"))
+	assert.Equal(t, "3/4/2019 0:05:42", parseTime("43528.003958333335", "M/D/YYYY h:mm:s"))
+	assert.Equal(t, "0:05", parseTime("43528.003958333335", "h:mm"))
+	assert.Equal(t, "0:0", parseTime("6.9444444444444444E-5", "h:m"))
+	assert.Equal(t, "0:00", parseTime("6.9444444444444444E-5", "h:mm"))
+	assert.Equal(t, "0:0", parseTime("6.9444444444444444E-5", "h:m"))
+	assert.Equal(t, "12:1", parseTime("0.50070601851851848", "h:m"))
+	assert.Equal(t, "23:30", parseTime("0.97952546296296295", "h:m"))
 	assert.Equal(t, "March", parseTime("43528", "mmmm"))
 	assert.Equal(t, "Monday", parseTime("43528", "dddd"))
 }

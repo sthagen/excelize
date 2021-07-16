@@ -12,7 +12,6 @@
 package excelize
 
 import (
-	"errors"
 	"strings"
 )
 
@@ -199,6 +198,10 @@ func (f *File) adjustAutoFilterHelper(dir adjustDirection, coordinates []int, nu
 // pair of coordinates.
 func (f *File) areaRefToCoordinates(ref string) ([]int, error) {
 	rng := strings.Split(strings.Replace(ref, "$", "", -1), ":")
+	if len(rng) < 2 {
+		return nil, ErrParameterInvalid
+	}
+
 	return areaRangeToCoordinates(rng[0], rng[1])
 }
 
@@ -219,7 +222,7 @@ func areaRangeToCoordinates(firstCell, lastCell string) ([]int, error) {
 // correct C1:B3 to B1:C3.
 func sortCoordinates(coordinates []int) error {
 	if len(coordinates) != 4 {
-		return errors.New("coordinates length must be 4")
+		return ErrCoordinates
 	}
 	if coordinates[2] < coordinates[0] {
 		coordinates[2], coordinates[0] = coordinates[0], coordinates[2]
@@ -234,7 +237,7 @@ func sortCoordinates(coordinates []int) error {
 // to area reference.
 func (f *File) coordinatesToAreaRef(coordinates []int) (string, error) {
 	if len(coordinates) != 4 {
-		return "", errors.New("coordinates length must be 4")
+		return "", ErrCoordinates
 	}
 	firstCell, err := CoordinatesToCellName(coordinates[0], coordinates[1])
 	if err != nil {

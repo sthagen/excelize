@@ -15,7 +15,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -46,9 +45,9 @@ var builtInNumFmt = map[int]string{
 	17: "mmm-yy",
 	18: "h:mm am/pm",
 	19: "h:mm:ss am/pm",
-	20: "h:mm",
-	21: "h:mm:ss",
-	22: "m/d/yy h:mm",
+	20: "hh:mm",
+	21: "hh:mm:ss",
+	22: "m/d/yy hh:mm",
 	37: "#,##0 ;(#,##0)",
 	38: "#,##0 ;[red](#,##0)",
 	39: "#,##0.00;(#,##0.00)",
@@ -934,8 +933,6 @@ func formatToE(v string, format string) string {
 	return fmt.Sprintf("%.e", f)
 }
 
-var dateTimeFormatsCache = map[string]string{}
-
 // parseTime provides a function to returns a string parsed using time.Time.
 // Replace Excel placeholders with Go time placeholders. For example, replace
 // yyyy with 2006. These are in a specific order, due to the fact that m is
@@ -961,11 +958,6 @@ func parseTime(v string, format string) string {
 
 	if format == "" {
 		return v
-	}
-
-	goFmt, found := dateTimeFormatsCache[format]
-	if found {
-		return val.Format(goFmt)
 	}
 
 	goFmt = format
@@ -1016,6 +1008,10 @@ func parseTime(v string, format string) string {
 	}
 	// It is the presence of the "am/pm" indicator that determines if this is
 	// a 12 hour or 24 hours time format, not the number of 'h' characters.
+	var padding bool
+	if val.Hour() == 0 && !strings.Contains(format, "hh") && !strings.Contains(format, "HH") {
+		padding = true
+	}
 	if is12HourTime(format) {
 		goFmt = strings.Replace(goFmt, "hh", "3", 1)
 		goFmt = strings.Replace(goFmt, "h", "3", 1)
@@ -1023,9 +1019,14 @@ func parseTime(v string, format string) string {
 		goFmt = strings.Replace(goFmt, "H", "3", 1)
 	} else {
 		goFmt = strings.Replace(goFmt, "hh", "15", 1)
-		goFmt = strings.Replace(goFmt, "h", "3", 1)
 		goFmt = strings.Replace(goFmt, "HH", "15", 1)
-		goFmt = strings.Replace(goFmt, "H", "3", 1)
+		if 0 < val.Hour() && val.Hour() < 12 {
+			goFmt = strings.Replace(goFmt, "h", "3", 1)
+			goFmt = strings.Replace(goFmt, "H", "3", 1)
+		} else {
+			goFmt = strings.Replace(goFmt, "h", "15", 1)
+			goFmt = strings.Replace(goFmt, "H", "15", 1)
+		}
 	}
 
 	for _, repl := range replacements {
@@ -1045,10 +1046,11 @@ func parseTime(v string, format string) string {
 		goFmt = strings.Replace(goFmt, "[3]", "3", 1)
 		goFmt = strings.Replace(goFmt, "[15]", "15", 1)
 	}
-
-	dateTimeFormatsCache[format] = goFmt
-
-	return val.Format(goFmt)
+	s := val.Format(goFmt)
+	if padding {
+		s = strings.Replace(s, "00:", "0:", 1)
+	}
+	return s
 }
 
 // is12HourTime checks whether an Excel time format string is a 12 hours form.
@@ -1101,14 +1103,14 @@ func parseFormatStyleSet(style interface{}) (*Style, error) {
 	case *Style:
 		fs = *v
 	default:
-		err = errors.New("invalid parameter type")
+		err = ErrParameterInvalid
 	}
 	if fs.Font != nil {
 		if len(fs.Font.Family) > MaxFontFamilyLength {
-			return &fs, errors.New("the length of the font family name must be smaller than or equal to 31")
+			return &fs, ErrFontLength
 		}
 		if fs.Font.Size > MaxFontSize {
-			return &fs, errors.New("font size must be between 1 and 409 points")
+			return &fs, ErrFontSize
 		}
 	}
 	return &fs, err
@@ -1988,6 +1990,8 @@ func (f *File) NewStyle(style interface{}) (int, error) {
 		fs.DecimalPlaces = 2
 	}
 	s := f.stylesReader()
+	s.Lock()
+	defer s.Unlock()
 	// check given style already exist.
 	if cellXfsID = f.getStyleID(s, fs); cellXfsID != -1 {
 		return cellXfsID, err
@@ -2187,17 +2191,16 @@ func (f *File) newFont(style *Style) *xlsxFont {
 		Family: &attrValInt{Val: intPtr(2)},
 	}
 	if style.Font.Bold {
-		fnt.B = &style.Font.Bold
+		fnt.B = &attrValBool{Val: &style.Font.Bold}
 	}
 	if style.Font.Italic {
-		fnt.I = &style.Font.Italic
+		fnt.I = &attrValBool{Val: &style.Font.Italic}
 	}
 	if *fnt.Name.Val == "" {
 		*fnt.Name.Val = f.GetDefaultFont()
 	}
 	if style.Font.Strike {
-		strike := true
-		fnt.Strike = &strike
+		fnt.Strike = &attrValBool{Val: &style.Font.Strike}
 	}
 	val, ok := fontUnderlineType[style.Font.Underline]
 	if ok {
@@ -2692,7 +2695,8 @@ func (f *File) SetCellStyle(sheet, hcell, vcell string, styleID int) error {
 	}
 	prepareSheetXML(ws, vcol, vrow)
 	makeContiguousColumns(ws, hrow, vrow, vcol)
-
+	ws.Lock()
+	defer ws.Unlock()
 	for r := hrowIdx; r <= vrowIdx; r++ {
 		for k := hcolIdx; k <= vcolIdx; k++ {
 			ws.SheetData.Row[r].C[k].S = styleID
