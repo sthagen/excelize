@@ -55,10 +55,10 @@ func TestStreamWriter(t *testing.T) {
 	// Test set cell with style.
 	styleID, err := file.NewStyle(`{"font":{"color":"#777777"}}`)
 	assert.NoError(t, err)
-	assert.NoError(t, streamWriter.SetRow("A4", []interface{}{Cell{StyleID: styleID}, Cell{Formula: "SUM(A10,B10)"}}), RowOpts{Height: 45})
+	assert.NoError(t, streamWriter.SetRow("A4", []interface{}{Cell{StyleID: styleID}, Cell{Formula: "SUM(A10,B10)"}}), RowOpts{Height: 45, StyleID: styleID})
 	assert.NoError(t, streamWriter.SetRow("A5", []interface{}{&Cell{StyleID: styleID, Value: "cell"}, &Cell{Formula: "SUM(A10,B10)"}}))
 	assert.NoError(t, streamWriter.SetRow("A6", []interface{}{time.Now()}))
-	assert.NoError(t, streamWriter.SetRow("A7", nil, RowOpts{Hidden: true}))
+	assert.NoError(t, streamWriter.SetRow("A7", nil, RowOpts{Height: 20, Hidden: true, StyleID: styleID}))
 	assert.EqualError(t, streamWriter.SetRow("A7", nil, RowOpts{Height: MaxRowHeight + 1}), ErrMaxRowHeight.Error())
 
 	for rowID := 10; rowID <= 51200; rowID++ {
@@ -115,6 +115,21 @@ func TestStreamWriter(t *testing.T) {
 	cellValue, err := file.GetCellValue("Sheet1", "A1")
 	assert.NoError(t, err)
 	assert.Equal(t, "Data", cellValue)
+
+	// Test stream reader for a worksheet with huge amounts of data.
+	file, err = OpenFile(filepath.Join("test", "TestStreamWriter.xlsx"))
+	assert.NoError(t, err)
+	rows, err := file.Rows("Sheet1")
+	assert.NoError(t, err)
+	cells := 0
+	for rows.Next() {
+		row, err := rows.Columns()
+		assert.NoError(t, err)
+		cells += len(row)
+	}
+	assert.NoError(t, rows.Close())
+	assert.Equal(t, 2559558, cells)
+	assert.NoError(t, file.Close())
 }
 
 func TestStreamSetColWidth(t *testing.T) {
@@ -159,8 +174,8 @@ func TestStreamTable(t *testing.T) {
 	// Test add table with illegal formatset.
 	assert.EqualError(t, streamWriter.AddTable("B26", "A21", `{x}`), "invalid character 'x' looking for beginning of object key string")
 	// Test add table with illegal cell coordinates.
-	assert.EqualError(t, streamWriter.AddTable("A", "B1", `{}`), `cannot convert cell "A" to coordinates: invalid cell name "A"`)
-	assert.EqualError(t, streamWriter.AddTable("A1", "B", `{}`), `cannot convert cell "B" to coordinates: invalid cell name "B"`)
+	assert.EqualError(t, streamWriter.AddTable("A", "B1", `{}`), newCellNameToCoordinatesError("A", newInvalidCellNameError("A")).Error())
+	assert.EqualError(t, streamWriter.AddTable("A1", "B", `{}`), newCellNameToCoordinatesError("B", newInvalidCellNameError("B")).Error())
 }
 
 func TestStreamMergeCells(t *testing.T) {
@@ -169,7 +184,7 @@ func TestStreamMergeCells(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, streamWriter.MergeCell("A1", "D1"))
 	// Test merge cells with illegal cell coordinates.
-	assert.EqualError(t, streamWriter.MergeCell("A", "D1"), `cannot convert cell "A" to coordinates: invalid cell name "A"`)
+	assert.EqualError(t, streamWriter.MergeCell("A", "D1"), newCellNameToCoordinatesError("A", newInvalidCellNameError("A")).Error())
 	assert.NoError(t, streamWriter.Flush())
 	// Save spreadsheet by the given path.
 	assert.NoError(t, file.SaveAs(filepath.Join("test", "TestStreamMergeCells.xlsx")))
@@ -189,28 +204,31 @@ func TestSetRow(t *testing.T) {
 	file := NewFile()
 	streamWriter, err := file.NewStreamWriter("Sheet1")
 	assert.NoError(t, err)
-	assert.EqualError(t, streamWriter.SetRow("A", []interface{}{}), `cannot convert cell "A" to coordinates: invalid cell name "A"`)
+	assert.EqualError(t, streamWriter.SetRow("A", []interface{}{}), newCellNameToCoordinatesError("A", newInvalidCellNameError("A")).Error())
 }
 
 func TestSetCellValFunc(t *testing.T) {
+	f := NewFile()
+	sw, err := f.NewStreamWriter("Sheet1")
+	assert.NoError(t, err)
 	c := &xlsxC{}
-	assert.NoError(t, setCellValFunc(c, 128))
-	assert.NoError(t, setCellValFunc(c, int8(-128)))
-	assert.NoError(t, setCellValFunc(c, int16(-32768)))
-	assert.NoError(t, setCellValFunc(c, int32(-2147483648)))
-	assert.NoError(t, setCellValFunc(c, int64(-9223372036854775808)))
-	assert.NoError(t, setCellValFunc(c, uint(128)))
-	assert.NoError(t, setCellValFunc(c, uint8(255)))
-	assert.NoError(t, setCellValFunc(c, uint16(65535)))
-	assert.NoError(t, setCellValFunc(c, uint32(4294967295)))
-	assert.NoError(t, setCellValFunc(c, uint64(18446744073709551615)))
-	assert.NoError(t, setCellValFunc(c, float32(100.1588)))
-	assert.NoError(t, setCellValFunc(c, float64(100.1588)))
-	assert.NoError(t, setCellValFunc(c, " Hello"))
-	assert.NoError(t, setCellValFunc(c, []byte(" Hello")))
-	assert.NoError(t, setCellValFunc(c, time.Now().UTC()))
-	assert.NoError(t, setCellValFunc(c, time.Duration(1e13)))
-	assert.NoError(t, setCellValFunc(c, true))
-	assert.NoError(t, setCellValFunc(c, nil))
-	assert.NoError(t, setCellValFunc(c, complex64(5+10i)))
+	assert.NoError(t, sw.setCellValFunc(c, 128))
+	assert.NoError(t, sw.setCellValFunc(c, int8(-128)))
+	assert.NoError(t, sw.setCellValFunc(c, int16(-32768)))
+	assert.NoError(t, sw.setCellValFunc(c, int32(-2147483648)))
+	assert.NoError(t, sw.setCellValFunc(c, int64(-9223372036854775808)))
+	assert.NoError(t, sw.setCellValFunc(c, uint(128)))
+	assert.NoError(t, sw.setCellValFunc(c, uint8(255)))
+	assert.NoError(t, sw.setCellValFunc(c, uint16(65535)))
+	assert.NoError(t, sw.setCellValFunc(c, uint32(4294967295)))
+	assert.NoError(t, sw.setCellValFunc(c, uint64(18446744073709551615)))
+	assert.NoError(t, sw.setCellValFunc(c, float32(100.1588)))
+	assert.NoError(t, sw.setCellValFunc(c, float64(100.1588)))
+	assert.NoError(t, sw.setCellValFunc(c, " Hello"))
+	assert.NoError(t, sw.setCellValFunc(c, []byte(" Hello")))
+	assert.NoError(t, sw.setCellValFunc(c, time.Now().UTC()))
+	assert.NoError(t, sw.setCellValFunc(c, time.Duration(1e13)))
+	assert.NoError(t, sw.setCellValFunc(c, true))
+	assert.NoError(t, sw.setCellValFunc(c, nil))
+	assert.NoError(t, sw.setCellValFunc(c, complex64(5+10i)))
 }

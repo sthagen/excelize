@@ -158,7 +158,7 @@ func TestAddPivotTable(t *testing.T) {
 	}))
 
 	// Test empty pivot table options
-	assert.EqualError(t, f.AddPivotTable(nil), "parameter is required")
+	assert.EqualError(t, f.AddPivotTable(nil), ErrParameterRequired.Error())
 	// Test invalid data range
 	assert.EqualError(t, f.AddPivotTable(&PivotTableOption{
 		DataRange:       "Sheet1!$A$1:$A$1",
@@ -227,7 +227,7 @@ func TestAddPivotTable(t *testing.T) {
 
 	// Test adjust range with invalid range
 	_, _, err := f.adjustRange("")
-	assert.EqualError(t, err, "parameter is required")
+	assert.EqualError(t, err, ErrParameterRequired.Error())
 	// Test adjust range with incorrect range
 	_, _, err = f.adjustRange("sheet1!")
 	assert.EqualError(t, err, "parameter is invalid")
@@ -299,10 +299,6 @@ func TestGetPivotFieldsOrder(t *testing.T) {
 	// Test get pivot fields order with not exist worksheet
 	_, err := f.getPivotFieldsOrder(&PivotTableOption{DataRange: "SheetN!$A$1:$E$31"})
 	assert.EqualError(t, err, "sheet SheetN is not exist")
-}
-
-func TestInStrSlice(t *testing.T) {
-	assert.EqualValues(t, -1, inStrSlice([]string{}, ""))
 }
 
 func TestGetPivotTableFieldName(t *testing.T) {

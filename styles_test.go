@@ -203,10 +203,13 @@ func TestNewStyle(t *testing.T) {
 	_, err = f.NewStyle(Style{})
 	assert.EqualError(t, err, ErrParameterInvalid.Error())
 
+	var exp string
+	_, err = f.NewStyle(&Style{CustomNumFmt: &exp})
+	assert.EqualError(t, err, ErrCustomNumFmt.Error())
 	_, err = f.NewStyle(&Style{Font: &Font{Family: strings.Repeat("s", MaxFontFamilyLength+1)}})
-	assert.EqualError(t, err, "the length of the font family name must be smaller than or equal to 31")
+	assert.EqualError(t, err, ErrFontLength.Error())
 	_, err = f.NewStyle(&Style{Font: &Font{Size: MaxFontSize + 1}})
-	assert.EqualError(t, err, "font size must be between 1 and 409 points")
+	assert.EqualError(t, err, ErrFontSize.Error())
 
 	// new numeric custom style
 	fmt := "####;####"
@@ -240,6 +243,42 @@ func TestNewStyle(t *testing.T) {
 
 	nf = f.Styles.CellXfs.Xf[styleID]
 	assert.Equal(t, 32, *nf.NumFmtID)
+
+	// Test set build-in scientific number format
+	styleID, err = f.NewStyle(&Style{NumFmt: 11})
+	assert.NoError(t, err)
+	assert.NoError(t, f.SetCellStyle("Sheet1", "A1", "B1", styleID))
+	assert.NoError(t, f.SetSheetRow("Sheet1", "A1", &[]float64{1.23, 1.234}))
+	rows, err := f.GetRows("Sheet1")
+	assert.NoError(t, err)
+	assert.Equal(t, [][]string{{"1.23E+00", "1.23E+00"}}, rows)
+
+	f = NewFile()
+	// Test currency number format
+	customNumFmt := "[$$-409]#,##0.00"
+	style1, err := f.NewStyle(&Style{CustomNumFmt: &customNumFmt})
+	assert.NoError(t, err)
+	style2, err := f.NewStyle(&Style{NumFmt: 165})
+	assert.NoError(t, err)
+	assert.Equal(t, style1, style2)
+
+	style3, err := f.NewStyle(&Style{NumFmt: 166})
+	assert.NoError(t, err)
+	assert.Equal(t, 2, style3)
+
+	f = NewFile()
+	f.Styles.NumFmts = nil
+	f.Styles.CellXfs.Xf = nil
+	style4, err := f.NewStyle(&Style{NumFmt: 160, Lang: "unknown"})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, style4)
+
+	f = NewFile()
+	f.Styles.NumFmts = nil
+	f.Styles.CellXfs.Xf = nil
+	style5, err := f.NewStyle(&Style{NumFmt: 160, Lang: "zh-cn"})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, style5)
 }
 
 func TestGetDefaultFont(t *testing.T) {
@@ -250,10 +289,10 @@ func TestGetDefaultFont(t *testing.T) {
 
 func TestSetDefaultFont(t *testing.T) {
 	f := NewFile()
-	f.SetDefaultFont("Ariel")
+	f.SetDefaultFont("Arial")
 	styles := f.stylesReader()
 	s := f.GetDefaultFont()
-	assert.Equal(t, s, "Ariel", "Default font should change to Ariel")
+	assert.Equal(t, s, "Arial", "Default font should change to Arial")
 	assert.Equal(t, *styles.CellStyles.CellStyle[0].CustomBuiltIn, true)
 }
 
@@ -261,7 +300,7 @@ func TestStylesReader(t *testing.T) {
 	f := NewFile()
 	// Test read styles with unsupported charset.
 	f.Styles = nil
-	f.Pkg.Store("xl/styles.xml", MacintoshCyrillicCharset)
+	f.Pkg.Store(defaultXMLPathStyles, MacintoshCyrillicCharset)
 	assert.EqualValues(t, new(xlsxStyleSheet), f.stylesReader())
 }
 
@@ -295,6 +334,7 @@ func TestParseTime(t *testing.T) {
 	assert.Equal(t, "3/4/2019 5:5:42", parseTime("43528.2123", "M/D/YYYY h:m:s"))
 	assert.Equal(t, "3/4/2019 0:5:42", parseTime("43528.003958333335", "m/d/yyyy h:m:s"))
 	assert.Equal(t, "3/4/2019 0:05:42", parseTime("43528.003958333335", "M/D/YYYY h:mm:s"))
+	assert.Equal(t, "3:30:00 PM", parseTime("0.64583333333333337", "h:mm:ss am/pm"))
 	assert.Equal(t, "0:05", parseTime("43528.003958333335", "h:mm"))
 	assert.Equal(t, "0:0", parseTime("6.9444444444444444E-5", "h:m"))
 	assert.Equal(t, "0:00", parseTime("6.9444444444444444E-5", "h:mm"))
@@ -316,4 +356,19 @@ func TestThemeColor(t *testing.T) {
 	} {
 		assert.Equal(t, clr[0], clr[1])
 	}
+}
+
+func TestGetNumFmtID(t *testing.T) {
+	f := NewFile()
+
+	fs1, err := parseFormatStyleSet(`{"protection":{"hidden":false,"locked":false},"number_format":10}`)
+	assert.NoError(t, err)
+	id1 := getNumFmtID(&xlsxStyleSheet{}, fs1)
+
+	fs2, err := parseFormatStyleSet(`{"protection":{"hidden":false,"locked":false},"number_format":0}`)
+	assert.NoError(t, err)
+	id2 := getNumFmtID(&xlsxStyleSheet{}, fs2)
+
+	assert.NotEqual(t, id1, id2)
+	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestStyleNumFmt.xlsx")))
 }

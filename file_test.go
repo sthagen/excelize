@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func BenchmarkWrite(b *testing.B) {
@@ -37,9 +38,7 @@ func BenchmarkWrite(b *testing.B) {
 func TestWriteTo(t *testing.T) {
 	// Test WriteToBuffer err
 	{
-		f := File{}
-		buf := bytes.Buffer{}
-		f.Pkg = sync.Map{}
+		f, buf := File{Pkg: sync.Map{}}, bytes.Buffer{}
 		f.Pkg.Store("/d/", []byte("s"))
 		_, err := f.WriteTo(bufio.NewWriter(&buf))
 		assert.EqualError(t, err, "zip: write to directory")
@@ -47,9 +46,7 @@ func TestWriteTo(t *testing.T) {
 	}
 	// Test file path overflow
 	{
-		f := File{}
-		buf := bytes.Buffer{}
-		f.Pkg = sync.Map{}
+		f, buf := File{Pkg: sync.Map{}}, bytes.Buffer{}
 		const maxUint16 = 1<<16 - 1
 		f.Pkg.Store(strings.Repeat("s", maxUint16+1), nil)
 		_, err := f.WriteTo(bufio.NewWriter(&buf))
@@ -57,9 +54,7 @@ func TestWriteTo(t *testing.T) {
 	}
 	// Test StreamsWriter err
 	{
-		f := File{}
-		buf := bytes.Buffer{}
-		f.Pkg = sync.Map{}
+		f, buf := File{Pkg: sync.Map{}}, bytes.Buffer{}
 		f.Pkg.Store("s", nil)
 		f.streams = make(map[string]*StreamWriter)
 		file, _ := os.Open("123")
@@ -67,4 +62,19 @@ func TestWriteTo(t *testing.T) {
 		_, err := f.WriteTo(bufio.NewWriter(&buf))
 		assert.Nil(t, err)
 	}
+	// Test write with temporary file
+	{
+		f, buf := File{tempFiles: sync.Map{}}, bytes.Buffer{}
+		const maxUint16 = 1<<16 - 1
+		f.tempFiles.Store("s", "")
+		f.tempFiles.Store(strings.Repeat("s", maxUint16+1), "")
+		_, err := f.WriteTo(bufio.NewWriter(&buf))
+		assert.EqualError(t, err, "zip: FileHeader.Name too long")
+	}
+}
+
+func TestClose(t *testing.T) {
+	f := NewFile()
+	f.tempFiles.Store("/d/", "/d/")
+	require.Error(t, f.Close())
 }

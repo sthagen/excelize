@@ -39,6 +39,7 @@ func TestCols(t *testing.T) {
 	if !assert.Equal(t, collectedRows, returnedColumns) {
 		t.FailNow()
 	}
+	assert.NoError(t, f.Close())
 
 	f = NewFile()
 	cells := []string{"C2", "C3", "C4"}
@@ -58,38 +59,37 @@ func TestCols(t *testing.T) {
 }
 
 func TestColumnsIterator(t *testing.T) {
-	const (
-		sheet2         = "Sheet2"
-		expectedNumCol = 9
-	)
-
+	sheetName, colCount, expectedNumCol := "Sheet2", 0, 9
 	f, err := OpenFile(filepath.Join("test", "Book1.xlsx"))
 	require.NoError(t, err)
 
-	cols, err := f.Cols(sheet2)
+	cols, err := f.Cols(sheetName)
 	require.NoError(t, err)
 
-	var colCount int
 	for cols.Next() {
 		colCount++
+		assert.Equal(t, colCount, cols.CurrentCol())
+		assert.Equal(t, expectedNumCol, cols.TotalCols())
 		require.True(t, colCount <= expectedNumCol, "colCount is greater than expected")
 	}
 	assert.Equal(t, expectedNumCol, colCount)
+	assert.NoError(t, f.Close())
 
-	f = NewFile()
+	f, sheetName, colCount, expectedNumCol = NewFile(), "Sheet1", 0, 4
 	cells := []string{"C2", "C3", "C4", "D2", "D3", "D4"}
 	for _, cell := range cells {
-		assert.NoError(t, f.SetCellValue("Sheet1", cell, 1))
+		assert.NoError(t, f.SetCellValue(sheetName, cell, 1))
 	}
-	cols, err = f.Cols("Sheet1")
+	cols, err = f.Cols(sheetName)
 	require.NoError(t, err)
 
-	colCount = 0
 	for cols.Next() {
 		colCount++
+		assert.Equal(t, colCount, cols.CurrentCol())
+		assert.Equal(t, expectedNumCol, cols.TotalCols())
 		require.True(t, colCount <= 4, "colCount is greater than expected")
 	}
-	assert.Equal(t, 4, colCount)
+	assert.Equal(t, expectedNumCol, colCount)
 }
 
 func TestColsError(t *testing.T) {
@@ -99,6 +99,7 @@ func TestColsError(t *testing.T) {
 	}
 	_, err = f.Cols("SheetN")
 	assert.EqualError(t, err, "sheet SheetN is not exist")
+	assert.NoError(t, f.Close())
 }
 
 func TestGetColsError(t *testing.T) {
@@ -108,6 +109,7 @@ func TestGetColsError(t *testing.T) {
 	}
 	_, err = f.GetCols("SheetN")
 	assert.EqualError(t, err, "sheet SheetN is not exist")
+	assert.NoError(t, f.Close())
 
 	f = NewFile()
 	f.Sheet.Delete("xl/worksheets/sheet1.xml")
@@ -116,22 +118,19 @@ func TestGetColsError(t *testing.T) {
 	_, err = f.GetCols("Sheet1")
 	assert.EqualError(t, err, `strconv.Atoi: parsing "A": invalid syntax`)
 
-	f = NewFile()
-	f.Sheet.Delete("xl/worksheets/sheet1.xml")
 	f.Pkg.Store("xl/worksheets/sheet1.xml", []byte(`<worksheet><sheetData><row r="2"><c r="A" t="str"><v>B</v></c></row></sheetData></worksheet>`))
-	f.checked = nil
 	_, err = f.GetCols("Sheet1")
-	assert.EqualError(t, err, `cannot convert cell "A" to coordinates: invalid cell name "A"`)
+	assert.EqualError(t, err, newCellNameToCoordinatesError("A", newInvalidCellNameError("A")).Error())
 
 	f = NewFile()
 	cols, err := f.Cols("Sheet1")
 	assert.NoError(t, err)
-	cols.totalRow = 2
-	cols.totalCol = 2
+	cols.totalRows = 2
+	cols.totalCols = 2
 	cols.curCol = 1
 	cols.sheetXML = []byte(`<worksheet><sheetData><row r="1"><c r="A" t="str"><v>A</v></c></row></sheetData></worksheet>`)
 	_, err = cols.Rows()
-	assert.EqualError(t, err, `cannot convert cell "A" to coordinates: invalid cell name "A"`)
+	assert.EqualError(t, err, newCellNameToCoordinatesError("A", newInvalidCellNameError("A")).Error())
 }
 
 func TestColsRows(t *testing.T) {
@@ -209,12 +208,12 @@ func TestColumnVisibility(t *testing.T) {
 
 		// Test get column visible with illegal cell coordinates.
 		_, err = f.GetColVisible("Sheet1", "*")
-		assert.EqualError(t, err, `invalid column name "*"`)
-		assert.EqualError(t, f.SetColVisible("Sheet1", "*", false), `invalid column name "*"`)
+		assert.EqualError(t, err, newInvalidColumnNameError("*").Error())
+		assert.EqualError(t, f.SetColVisible("Sheet1", "*", false), newInvalidColumnNameError("*").Error())
 
 		f.NewSheet("Sheet3")
 		assert.NoError(t, f.SetColVisible("Sheet3", "E", false))
-		assert.EqualError(t, f.SetColVisible("Sheet1", "A:-1", true), "invalid column name \"-1\"")
+		assert.EqualError(t, f.SetColVisible("Sheet1", "A:-1", true), newInvalidColumnNameError("-1").Error())
 		assert.EqualError(t, f.SetColVisible("SheetN", "E", false), "sheet SheetN is not exist")
 		assert.NoError(t, f.SaveAs(filepath.Join("test", "TestColumnVisibility.xlsx")))
 	})
@@ -241,9 +240,9 @@ func TestOutlineLevel(t *testing.T) {
 	assert.Equal(t, uint8(4), level)
 	assert.NoError(t, err)
 
-	level, err = f.GetColOutlineLevel("Shee2", "A")
+	level, err = f.GetColOutlineLevel("SheetN", "A")
 	assert.Equal(t, uint8(0), level)
-	assert.EqualError(t, err, "sheet Shee2 is not exist")
+	assert.EqualError(t, err, "sheet SheetN is not exist")
 
 	assert.NoError(t, f.SetColWidth("Sheet2", "A", "D", 13))
 	assert.EqualError(t, f.SetColWidth("Sheet2", "A", "D", MaxColumnWidth+1), ErrColumnWidth.Error())
@@ -259,20 +258,20 @@ func TestOutlineLevel(t *testing.T) {
 	assert.EqualError(t, err, "sheet SheetN is not exist")
 
 	// Test set and get column outline level with illegal cell coordinates.
-	assert.EqualError(t, f.SetColOutlineLevel("Sheet1", "*", 1), `invalid column name "*"`)
+	assert.EqualError(t, f.SetColOutlineLevel("Sheet1", "*", 1), newInvalidColumnNameError("*").Error())
 	_, err = f.GetColOutlineLevel("Sheet1", "*")
-	assert.EqualError(t, err, `invalid column name "*"`)
+	assert.EqualError(t, err, newInvalidColumnNameError("*").Error())
 
 	// Test set column outline level on not exists worksheet.
 	assert.EqualError(t, f.SetColOutlineLevel("SheetN", "E", 2), "sheet SheetN is not exist")
 
-	assert.EqualError(t, f.SetRowOutlineLevel("Sheet1", 0, 1), "invalid row number 0")
+	assert.EqualError(t, f.SetRowOutlineLevel("Sheet1", 0, 1), newInvalidRowNumberError(0).Error())
 	level, err = f.GetRowOutlineLevel("Sheet1", 2)
 	assert.NoError(t, err)
 	assert.Equal(t, uint8(7), level)
 
 	_, err = f.GetRowOutlineLevel("Sheet1", 0)
-	assert.EqualError(t, err, `invalid row number 0`)
+	assert.EqualError(t, err, newInvalidRowNumberError(0).Error())
 
 	level, err = f.GetRowOutlineLevel("Sheet1", 10)
 	assert.NoError(t, err)
@@ -283,6 +282,7 @@ func TestOutlineLevel(t *testing.T) {
 	f, err = OpenFile(filepath.Join("test", "Book1.xlsx"))
 	assert.NoError(t, err)
 	assert.NoError(t, f.SetColOutlineLevel("Sheet2", "B", 2))
+	assert.NoError(t, f.Close())
 }
 
 func TestSetColStyle(t *testing.T) {
@@ -293,8 +293,8 @@ func TestSetColStyle(t *testing.T) {
 	// Test set column style on not exists worksheet.
 	assert.EqualError(t, f.SetColStyle("SheetN", "E", style), "sheet SheetN is not exist")
 	// Test set column style with illegal cell coordinates.
-	assert.EqualError(t, f.SetColStyle("Sheet1", "*", style), `invalid column name "*"`)
-	assert.EqualError(t, f.SetColStyle("Sheet1", "A:*", style), `invalid column name "*"`)
+	assert.EqualError(t, f.SetColStyle("Sheet1", "*", style), newInvalidColumnNameError("*").Error())
+	assert.EqualError(t, f.SetColStyle("Sheet1", "A:*", style), newInvalidColumnNameError("*").Error())
 
 	assert.NoError(t, f.SetColStyle("Sheet1", "B", style))
 	// Test set column style with already exists column with style.
@@ -317,9 +317,9 @@ func TestColWidth(t *testing.T) {
 	// Test set and get column width with illegal cell coordinates.
 	width, err = f.GetColWidth("Sheet1", "*")
 	assert.Equal(t, defaultColWidth, width)
-	assert.EqualError(t, err, `invalid column name "*"`)
-	assert.EqualError(t, f.SetColWidth("Sheet1", "*", "B", 1), `invalid column name "*"`)
-	assert.EqualError(t, f.SetColWidth("Sheet1", "A", "*", 1), `invalid column name "*"`)
+	assert.EqualError(t, err, newInvalidColumnNameError("*").Error())
+	assert.EqualError(t, f.SetColWidth("Sheet1", "*", "B", 1), newInvalidColumnNameError("*").Error())
+	assert.EqualError(t, f.SetColWidth("Sheet1", "A", "*", 1), newInvalidColumnNameError("*").Error())
 
 	// Test set column width on not exists worksheet.
 	assert.EqualError(t, f.SetColWidth("SheetN", "B", "A", 12), "sheet SheetN is not exist")
@@ -345,7 +345,7 @@ func TestInsertCol(t *testing.T) {
 	assert.NoError(t, f.InsertCol(sheet1, "A"))
 
 	// Test insert column with illegal cell coordinates.
-	assert.EqualError(t, f.InsertCol("Sheet1", "*"), `invalid column name "*"`)
+	assert.EqualError(t, f.InsertCol("Sheet1", "*"), newInvalidColumnNameError("*").Error())
 
 	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestInsertCol.xlsx")))
 }
@@ -366,7 +366,7 @@ func TestRemoveCol(t *testing.T) {
 	assert.NoError(t, f.RemoveCol(sheet1, "A"))
 
 	// Test remove column with illegal cell coordinates.
-	assert.EqualError(t, f.RemoveCol("Sheet1", "*"), `invalid column name "*"`)
+	assert.EqualError(t, f.RemoveCol("Sheet1", "*"), newInvalidColumnNameError("*").Error())
 
 	// Test remove column on not exists worksheet.
 	assert.EqualError(t, f.RemoveCol("SheetN", "B"), "sheet SheetN is not exist")
