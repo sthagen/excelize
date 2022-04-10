@@ -48,172 +48,192 @@ func TestAdjustMergeCells(t *testing.T) {
 
 	// testing adjustMergeCells
 	var cases []struct {
-		lable  string
-		ws     *xlsxWorksheet
-		dir    adjustDirection
-		num    int
-		offset int
-		expect string
+		label      string
+		ws         *xlsxWorksheet
+		dir        adjustDirection
+		num        int
+		offset     int
+		expect     string
+		expectRect []int
 	}
 
 	// testing insert
 	cases = []struct {
-		lable  string
-		ws     *xlsxWorksheet
-		dir    adjustDirection
-		num    int
-		offset int
-		expect string
+		label      string
+		ws         *xlsxWorksheet
+		dir        adjustDirection
+		num        int
+		offset     int
+		expect     string
+		expectRect []int
 	}{
 		{
-			lable: "insert row on ref",
+			label: "insert row on ref",
 			ws: &xlsxWorksheet{
 				MergeCells: &xlsxMergeCells{
 					Cells: []*xlsxMergeCell{
 						{
-							Ref: "A2:B3",
+							Ref:  "A2:B3",
+							rect: []int{1, 2, 2, 3},
 						},
 					},
 				},
 			},
-			dir:    rows,
-			num:    2,
-			offset: 1,
-			expect: "A3:B4",
+			dir:        rows,
+			num:        2,
+			offset:     1,
+			expect:     "A3:B4",
+			expectRect: []int{1, 3, 2, 4},
 		},
 		{
-			lable: "insert row on bottom of ref",
+			label: "insert row on bottom of ref",
 			ws: &xlsxWorksheet{
 				MergeCells: &xlsxMergeCells{
 					Cells: []*xlsxMergeCell{
 						{
-							Ref: "A2:B3",
+							Ref:  "A2:B3",
+							rect: []int{1, 2, 2, 3},
 						},
 					},
 				},
 			},
-			dir:    rows,
-			num:    3,
-			offset: 1,
-			expect: "A2:B4",
+			dir:        rows,
+			num:        3,
+			offset:     1,
+			expect:     "A2:B4",
+			expectRect: []int{1, 2, 2, 4},
 		},
 		{
-			lable: "insert column on the left",
+			label: "insert column on the left",
 			ws: &xlsxWorksheet{
 				MergeCells: &xlsxMergeCells{
 					Cells: []*xlsxMergeCell{
 						{
-							Ref: "A2:B3",
+							Ref:  "A2:B3",
+							rect: []int{1, 2, 2, 3},
 						},
 					},
 				},
 			},
-			dir:    columns,
-			num:    1,
-			offset: 1,
-			expect: "B2:C3",
+			dir:        columns,
+			num:        1,
+			offset:     1,
+			expect:     "B2:C3",
+			expectRect: []int{2, 2, 3, 3},
 		},
 	}
 	for _, c := range cases {
 		assert.NoError(t, f.adjustMergeCells(c.ws, c.dir, c.num, 1))
-		assert.Equal(t, c.expect, c.ws.MergeCells.Cells[0].Ref, c.lable)
+		assert.Equal(t, c.expect, c.ws.MergeCells.Cells[0].Ref, c.label)
+		assert.Equal(t, c.expectRect, c.ws.MergeCells.Cells[0].rect, c.label)
 	}
 
 	// testing delete
 	cases = []struct {
-		lable  string
-		ws     *xlsxWorksheet
-		dir    adjustDirection
-		num    int
-		offset int
-		expect string
+		label      string
+		ws         *xlsxWorksheet
+		dir        adjustDirection
+		num        int
+		offset     int
+		expect     string
+		expectRect []int
 	}{
 		{
-			lable: "delete row on top of ref",
+			label: "delete row on top of ref",
 			ws: &xlsxWorksheet{
 				MergeCells: &xlsxMergeCells{
 					Cells: []*xlsxMergeCell{
 						{
-							Ref: "A2:B3",
+							Ref:  "A2:B3",
+							rect: []int{1, 2, 2, 3},
 						},
 					},
 				},
 			},
-			dir:    rows,
-			num:    2,
-			offset: -1,
-			expect: "A2:B2",
+			dir:        rows,
+			num:        2,
+			offset:     -1,
+			expect:     "A2:B2",
+			expectRect: []int{1, 2, 2, 2},
 		},
 		{
-			lable: "delete row on bottom of ref",
+			label: "delete row on bottom of ref",
 			ws: &xlsxWorksheet{
 				MergeCells: &xlsxMergeCells{
 					Cells: []*xlsxMergeCell{
 						{
-							Ref: "A2:B3",
+							Ref:  "A2:B3",
+							rect: []int{1, 2, 2, 3},
 						},
 					},
 				},
 			},
-			dir:    rows,
-			num:    3,
-			offset: -1,
-			expect: "A2:B2",
+			dir:        rows,
+			num:        3,
+			offset:     -1,
+			expect:     "A2:B2",
+			expectRect: []int{1, 2, 2, 2},
 		},
 		{
-			lable: "delete column on the ref left",
+			label: "delete column on the ref left",
 			ws: &xlsxWorksheet{
 				MergeCells: &xlsxMergeCells{
 					Cells: []*xlsxMergeCell{
 						{
-							Ref: "A2:B3",
+							Ref:  "A2:B3",
+							rect: []int{1, 2, 2, 3},
 						},
 					},
 				},
 			},
-			dir:    columns,
-			num:    1,
-			offset: -1,
-			expect: "A2:A3",
+			dir:        columns,
+			num:        1,
+			offset:     -1,
+			expect:     "A2:A3",
+			expectRect: []int{1, 2, 1, 3},
 		},
 		{
-			lable: "delete column on the ref right",
+			label: "delete column on the ref right",
 			ws: &xlsxWorksheet{
 				MergeCells: &xlsxMergeCells{
 					Cells: []*xlsxMergeCell{
 						{
-							Ref: "A2:B3",
+							Ref:  "A2:B3",
+							rect: []int{1, 2, 2, 3},
 						},
 					},
 				},
 			},
-			dir:    columns,
-			num:    2,
-			offset: -1,
-			expect: "A2:A3",
+			dir:        columns,
+			num:        2,
+			offset:     -1,
+			expect:     "A2:A3",
+			expectRect: []int{1, 2, 1, 3},
 		},
 	}
 	for _, c := range cases {
 		assert.NoError(t, f.adjustMergeCells(c.ws, c.dir, c.num, -1))
-		assert.Equal(t, c.expect, c.ws.MergeCells.Cells[0].Ref, c.lable)
+		assert.Equal(t, c.expect, c.ws.MergeCells.Cells[0].Ref, c.label)
 	}
 
 	// testing delete one row/column
 	cases = []struct {
-		lable  string
-		ws     *xlsxWorksheet
-		dir    adjustDirection
-		num    int
-		offset int
-		expect string
+		label      string
+		ws         *xlsxWorksheet
+		dir        adjustDirection
+		num        int
+		offset     int
+		expect     string
+		expectRect []int
 	}{
 		{
-			lable: "delete one row ref",
+			label: "delete one row ref",
 			ws: &xlsxWorksheet{
 				MergeCells: &xlsxMergeCells{
 					Cells: []*xlsxMergeCell{
 						{
-							Ref: "A1:B1",
+							Ref:  "A1:B1",
+							rect: []int{1, 1, 2, 1},
 						},
 					},
 				},
@@ -223,12 +243,13 @@ func TestAdjustMergeCells(t *testing.T) {
 			offset: -1,
 		},
 		{
-			lable: "delete one column ref",
+			label: "delete one column ref",
 			ws: &xlsxWorksheet{
 				MergeCells: &xlsxMergeCells{
 					Cells: []*xlsxMergeCell{
 						{
-							Ref: "A1:A2",
+							Ref:  "A1:A2",
+							rect: []int{1, 1, 1, 2},
 						},
 					},
 				},
@@ -240,7 +261,7 @@ func TestAdjustMergeCells(t *testing.T) {
 	}
 	for _, c := range cases {
 		assert.NoError(t, f.adjustMergeCells(c.ws, c.dir, c.num, -1))
-		assert.Equal(t, 0, len(c.ws.MergeCells.Cells), c.lable)
+		assert.Equal(t, 0, len(c.ws.MergeCells.Cells), c.label)
 	}
 
 	f = NewFile()
@@ -277,9 +298,11 @@ func TestAdjustHelper(t *testing.T) {
 	f := NewFile()
 	f.NewSheet("Sheet2")
 	f.Sheet.Store("xl/worksheets/sheet1.xml", &xlsxWorksheet{
-		MergeCells: &xlsxMergeCells{Cells: []*xlsxMergeCell{{Ref: "A:B1"}}}})
+		MergeCells: &xlsxMergeCells{Cells: []*xlsxMergeCell{{Ref: "A:B1"}}},
+	})
 	f.Sheet.Store("xl/worksheets/sheet2.xml", &xlsxWorksheet{
-		AutoFilter: &xlsxAutoFilter{Ref: "A1:B"}})
+		AutoFilter: &xlsxAutoFilter{Ref: "A1:B"},
+	})
 	// testing adjustHelper with illegal cell coordinates.
 	assert.EqualError(t, f.adjustHelper("Sheet1", rows, 0, 0), newCellNameToCoordinatesError("A", newInvalidCellNameError("A")).Error())
 	assert.EqualError(t, f.adjustHelper("Sheet2", rows, 0, 0), newCellNameToCoordinatesError("B", newInvalidCellNameError("B")).Error())

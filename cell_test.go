@@ -2,6 +2,7 @@ package excelize
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -29,11 +30,13 @@ func TestConcurrency(t *testing.T) {
 			_, err := f.GetCellValue("Sheet1", fmt.Sprintf("A%d", val))
 			assert.NoError(t, err)
 			// Concurrency set rows
-			assert.NoError(t, f.SetSheetRow("Sheet1", "B6", &[]interface{}{" Hello",
+			assert.NoError(t, f.SetSheetRow("Sheet1", "B6", &[]interface{}{
+				" Hello",
 				[]byte("World"), 42, int8(1<<8/2 - 1), int16(1<<16/2 - 1), int32(1<<32/2 - 1),
-				int64(1<<32/2 - 1), float32(42.65418), float64(-42.65418), float32(42), float64(42),
+				int64(1<<32/2 - 1), float32(42.65418), -42.65418, float32(42), float64(42),
 				uint(1<<32 - 1), uint8(1<<8 - 1), uint16(1<<16 - 1), uint32(1<<32 - 1),
-				uint64(1<<32 - 1), true, complex64(5 + 10i)}))
+				uint64(1<<32 - 1), true, complex64(5 + 10i),
+			}))
 			// Concurrency create style
 			style, err := f.NewStyle(`{"font":{"color":"#1265BE","underline":"single"}}`)
 			assert.NoError(t, err)
@@ -127,7 +130,7 @@ func TestSetCellFloat(t *testing.T) {
 		assert.Equal(t, "123", val, "A1 should be 123")
 		val, err = f.GetCellValue(sheet, "A2")
 		assert.NoError(t, err)
-		assert.Equal(t, "123.0", val, "A2 should be 123.0")
+		assert.Equal(t, "123", val, "A2 should be 123")
 	})
 
 	t.Run("with a decimal and precision limit", func(t *testing.T) {
@@ -285,12 +288,14 @@ func TestGetCellValue(t *testing.T) {
     <c r="S1"><v>275.39999999999998</v></c>
     <c r="T1"><v>68.900000000000006</v></c>
     <c r="U1"><v>8.8880000000000001E-2</v></c>
-    <c r="V1"><v>4.0000000000000003E-5</v></c>
+    <c r="V1"><v>4.0000000000000003e-5</v></c>
     <c r="W1"><v>2422.3000000000002</v></c>
     <c r="X1"><v>1101.5999999999999</v></c>
     <c r="Y1"><v>275.39999999999998</v></c>
     <c r="Z1"><v>68.900000000000006</v></c>
     <c r="AA1"><v>1.1000000000000001</v></c>
+    <c r="AA2"><v>1234567890123_4</v></c>
+    <c r="AA3"><v>123456789_0123_4</v></c>
 </row>`)))
 	f.checked = nil
 	rows, err = f.GetRows("Sheet1")
@@ -322,6 +327,8 @@ func TestGetCellValue(t *testing.T) {
 		"275.4",
 		"68.9",
 		"1.1",
+		"1234567890123_4",
+		"123456789_0123_4",
 	}}, rows)
 	assert.NoError(t, err)
 }
@@ -337,6 +344,14 @@ func TestGetCellType(t *testing.T) {
 	assert.Equal(t, CellTypeString, cellType)
 	_, err = f.GetCellType("Sheet1", "A")
 	assert.EqualError(t, err, newCellNameToCoordinatesError("A", newInvalidCellNameError("A")).Error())
+}
+
+func TestGetValueFrom(t *testing.T) {
+	f := NewFile()
+	c := xlsxC{T: "s"}
+	value, err := c.getValueFrom(f, f.sharedStringsReader(), false)
+	assert.NoError(t, err)
+	assert.Equal(t, "", value)
 }
 
 func TestGetCellFormula(t *testing.T) {
@@ -375,7 +390,7 @@ func TestGetCellFormula(t *testing.T) {
 
 func ExampleFile_SetCellFloat() {
 	f := NewFile()
-	var x = 3.14159265
+	x := 3.14159265
 	if err := f.SetCellFloat("Sheet1", "A1", x, 2, 64); err != nil {
 		fmt.Println(err)
 	}
@@ -525,6 +540,7 @@ func TestGetCellRichText(t *testing.T) {
 	_, err = f.GetCellRichText("Sheet1", "A")
 	assert.EqualError(t, err, newCellNameToCoordinatesError("A", newInvalidCellNameError("A")).Error())
 }
+
 func TestSetCellRichText(t *testing.T) {
 	f := NewFile()
 	assert.NoError(t, f.SetRowHeight("Sheet1", 1, 35))
@@ -653,16 +669,67 @@ func TestFormattedValue2(t *testing.T) {
 func TestSharedStringsError(t *testing.T) {
 	f, err := OpenFile(filepath.Join("test", "Book1.xlsx"), Options{UnzipXMLSizeLimit: 128})
 	assert.NoError(t, err)
-	f.tempFiles.Store(dafaultXMLPathSharedStrings, "")
-	assert.Equal(t, "1", f.getFromStringItemMap(1))
-
+	tempFile, ok := f.tempFiles.Load(defaultXMLPathSharedStrings)
+	assert.True(t, ok)
+	f.tempFiles.Store(defaultXMLPathSharedStrings, "")
+	assert.Equal(t, "1", f.getFromStringItem(1))
+	// Cleanup undelete temporary files
+	assert.NoError(t, os.Remove(tempFile.(string)))
 	// Test reload the file error on set cell cell and rich text. The error message was different between macOS and Windows.
 	err = f.SetCellValue("Sheet1", "A19", "A19")
 	assert.Error(t, err)
 
-	f.tempFiles.Store(dafaultXMLPathSharedStrings, "")
+	f.tempFiles.Store(defaultXMLPathSharedStrings, "")
 	err = f.SetCellRichText("Sheet1", "A19", []RichTextRun{})
 	assert.Error(t, err)
-
 	assert.NoError(t, f.Close())
+
+	f, err = OpenFile(filepath.Join("test", "Book1.xlsx"), Options{UnzipXMLSizeLimit: 128})
+	assert.NoError(t, err)
+	rows, err := f.Rows("Sheet1")
+	assert.NoError(t, err)
+	const maxUint16 = 1<<16 - 1
+	currentRow := 0
+	for rows.Next() {
+		currentRow++
+		if currentRow == 19 {
+			_, err := rows.Columns()
+			assert.NoError(t, err)
+			// Test get cell value from string item with invalid offset
+			f.sharedStringItem[1] = []uint{maxUint16 - 1, maxUint16}
+			assert.Equal(t, "1", f.getFromStringItem(1))
+			break
+		}
+	}
+	assert.NoError(t, rows.Close())
+	// Test shared string item temporary files has been closed before close the workbook
+	assert.NoError(t, f.sharedStringTemp.Close())
+	assert.Error(t, f.Close())
+	// Cleanup undelete temporary files
+	f.tempFiles.Range(func(k, v interface{}) bool {
+		return assert.NoError(t, os.Remove(v.(string)))
+	})
+
+	f, err = OpenFile(filepath.Join("test", "Book1.xlsx"), Options{UnzipXMLSizeLimit: 128})
+	assert.NoError(t, err)
+	rows, err = f.Rows("Sheet1")
+	assert.NoError(t, err)
+	currentRow = 0
+	for rows.Next() {
+		currentRow++
+		if currentRow == 19 {
+			_, err := rows.Columns()
+			assert.NoError(t, err)
+			break
+		}
+	}
+	assert.NoError(t, rows.Close())
+	assert.NoError(t, f.sharedStringTemp.Close())
+	// Test shared string item temporary files has been closed before set the cell value
+	assert.Error(t, f.SetCellValue("Sheet1", "A1", "A1"))
+	assert.Error(t, f.Close())
+	// Cleanup undelete temporary files
+	f.tempFiles.Range(func(k, v interface{}) bool {
+		return assert.NoError(t, os.Remove(v.(string)))
+	})
 }

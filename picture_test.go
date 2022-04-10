@@ -1,18 +1,17 @@
 package excelize
 
 import (
+	"fmt"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-
-	_ "golang.org/x/image/tiff"
-
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	_ "golang.org/x/image/tiff"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -103,7 +102,7 @@ func TestGetPicture(t *testing.T) {
 	file, raw, err := f.GetPicture("Sheet1", "F21")
 	assert.NoError(t, err)
 	if !assert.NotEmpty(t, filepath.Join("test", file)) || !assert.NotEmpty(t, raw) ||
-		!assert.NoError(t, ioutil.WriteFile(filepath.Join("test", file), raw, 0644)) {
+		!assert.NoError(t, ioutil.WriteFile(filepath.Join("test", file), raw, 0o644)) {
 
 		t.FailNow()
 	}
@@ -138,7 +137,7 @@ func TestGetPicture(t *testing.T) {
 	file, raw, err = f.GetPicture("Sheet1", "F21")
 	assert.NoError(t, err)
 	if !assert.NotEmpty(t, filepath.Join("test", file)) || !assert.NotEmpty(t, raw) ||
-		!assert.NoError(t, ioutil.WriteFile(filepath.Join("test", file), raw, 0644)) {
+		!assert.NoError(t, ioutil.WriteFile(filepath.Join("test", file), raw, 0o644)) {
 		t.FailNow()
 	}
 

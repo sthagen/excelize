@@ -1,6 +1,7 @@
 package excelize
 
 import (
+	"encoding/xml"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -123,7 +124,6 @@ func TestPageLayoutOption(t *testing.T) {
 
 	for i, test := range testData {
 		t.Run(fmt.Sprintf("TestData%d", i), func(t *testing.T) {
-
 			opt := test.nonDefault
 			t.Logf("option %T", opt)
 
@@ -276,7 +276,7 @@ func TestDefinedName(t *testing.T) {
 		Name:     "Amount",
 		RefersTo: "Sheet1!$A$2:$D$5",
 		Comment:  "defined name comment",
-	}), ErrDefinedNameduplicate.Error())
+	}), ErrDefinedNameDuplicate.Error())
 	assert.EqualError(t, f.DeleteDefinedName(&DefinedName{
 		Name: "No Exist Defined Name",
 	}), ErrDefinedNameScope.Error())
@@ -400,9 +400,23 @@ func TestSetActiveSheet(t *testing.T) {
 
 func TestSetSheetName(t *testing.T) {
 	f := NewFile()
-	// Test set workksheet with the same name.
+	// Test set worksheet with the same name.
 	f.SetSheetName("Sheet1", "Sheet1")
 	assert.Equal(t, "Sheet1", f.GetSheetName(0))
+}
+
+func TestWorksheetWriter(t *testing.T) {
+	f := NewFile()
+	// Test set cell value with alternate content
+	f.Sheet.Delete("xl/worksheets/sheet1.xml")
+	worksheet := xml.Header + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData><row r="1"><c r="A1"><v>%d</v></c></row></sheetData><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main" Requires="a14"><xdr:twoCellAnchor editAs="oneCell"></xdr:twoCellAnchor></mc:Choice><mc:Fallback/></mc:AlternateContent></worksheet>`
+	f.Pkg.Store("xl/worksheets/sheet1.xml", []byte(fmt.Sprintf(worksheet, 1)))
+	f.checked = nil
+	assert.NoError(t, f.SetCellValue("Sheet1", "A1", 2))
+	f.workSheetWriter()
+	value, ok := f.Pkg.Load("xl/worksheets/sheet1.xml")
+	assert.True(t, ok)
+	assert.Equal(t, fmt.Sprintf(worksheet, 2), string(value.([]byte)))
 }
 
 func TestGetWorkbookPath(t *testing.T) {
@@ -414,7 +428,7 @@ func TestGetWorkbookPath(t *testing.T) {
 func TestGetWorkbookRelsPath(t *testing.T) {
 	f := NewFile()
 	f.Pkg.Delete("xl/_rels/.rels")
-	f.Pkg.Store("_rels/.rels", []byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument" Target="/workbook.xml"/></Relationships>`))
+	f.Pkg.Store("_rels/.rels", []byte(xml.Header+`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument" Target="/workbook.xml"/></Relationships>`))
 	assert.Equal(t, "_rels/workbook.xml.rels", f.getWorkbookRelsPath())
 }
 
@@ -452,6 +466,7 @@ func BenchmarkNewSheet(b *testing.B) {
 		}
 	})
 }
+
 func newSheetWithSet() {
 	file := NewFile()
 	file.NewSheet("sheet1")

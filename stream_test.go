@@ -53,7 +53,7 @@ func TestStreamWriter(t *testing.T) {
 	assert.NoError(t, streamWriter.SetRow("A3", row))
 
 	// Test set cell with style.
-	styleID, err := file.NewStyle(`{"font":{"color":"#777777"}}`)
+	styleID, err := file.NewStyle(&Style{Font: &Font{Color: "#777777"}})
 	assert.NoError(t, err)
 	assert.NoError(t, streamWriter.SetRow("A4", []interface{}{Cell{StyleID: styleID}, Cell{Formula: "SUM(A10,B10)"}}), RowOpts{Height: 45, StyleID: styleID})
 	assert.NoError(t, streamWriter.SetRow("A5", []interface{}{&Cell{StyleID: styleID, Value: "cell"}, &Cell{Formula: "SUM(A10,B10)"}}))
@@ -223,7 +223,7 @@ func TestSetCellValFunc(t *testing.T) {
 	assert.NoError(t, sw.setCellValFunc(c, uint32(4294967295)))
 	assert.NoError(t, sw.setCellValFunc(c, uint64(18446744073709551615)))
 	assert.NoError(t, sw.setCellValFunc(c, float32(100.1588)))
-	assert.NoError(t, sw.setCellValFunc(c, float64(100.1588)))
+	assert.NoError(t, sw.setCellValFunc(c, 100.1588))
 	assert.NoError(t, sw.setCellValFunc(c, " Hello"))
 	assert.NoError(t, sw.setCellValFunc(c, []byte(" Hello")))
 	assert.NoError(t, sw.setCellValFunc(c, time.Now().UTC()))

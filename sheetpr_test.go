@@ -108,7 +108,6 @@ func TestSheetPrOptions(t *testing.T) {
 
 	for i, test := range testData {
 		t.Run(fmt.Sprintf("TestData%d", i), func(t *testing.T) {
-
 			opt := test.nonDefault
 			t.Logf("option %T", opt)
 
@@ -153,10 +152,10 @@ func TestSheetPrOptions(t *testing.T) {
 	}
 }
 
-func TestSetSheetrOptions(t *testing.T) {
+func TestSetSheetPrOptions(t *testing.T) {
 	f := NewFile()
 	assert.NoError(t, f.SetSheetPrOptions("Sheet1", TabColor("")))
-	// Test SetSheetrOptions on not exists worksheet.
+	// Test SetSheetPrOptions on not exists worksheet.
 	assert.EqualError(t, f.SetSheetPrOptions("SheetN"), "sheet SheetN is not exist")
 }
 
@@ -258,7 +257,6 @@ func TestPageMarginsOption(t *testing.T) {
 
 	for i, test := range testData {
 		t.Run(fmt.Sprintf("TestData%d", i), func(t *testing.T) {
-
 			opt := test.nonDefault
 			t.Logf("option %T", opt)
 
@@ -395,7 +393,6 @@ func TestSheetFormatPrOptions(t *testing.T) {
 
 	for i, test := range testData {
 		t.Run(fmt.Sprintf("TestData%d", i), func(t *testing.T) {
-
 			opt := test.nonDefault
 			t.Logf("option %T", opt)
 

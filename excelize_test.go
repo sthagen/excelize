@@ -40,11 +40,11 @@ func TestOpenFile(t *testing.T) {
 	}
 	assert.NoError(t, f.UpdateLinkedValue())
 
-	assert.NoError(t, f.SetCellDefault("Sheet2", "A1", strconv.FormatFloat(float64(100.1588), 'f', -1, 32)))
-	assert.NoError(t, f.SetCellDefault("Sheet2", "A1", strconv.FormatFloat(float64(-100.1588), 'f', -1, 64)))
+	assert.NoError(t, f.SetCellDefault("Sheet2", "A1", strconv.FormatFloat(100.1588, 'f', -1, 32)))
+	assert.NoError(t, f.SetCellDefault("Sheet2", "A1", strconv.FormatFloat(-100.1588, 'f', -1, 64)))
 
 	// Test set cell value with illegal row number.
-	assert.EqualError(t, f.SetCellDefault("Sheet2", "A", strconv.FormatFloat(float64(-100.1588), 'f', -1, 64)),
+	assert.EqualError(t, f.SetCellDefault("Sheet2", "A", strconv.FormatFloat(-100.1588, 'f', -1, 64)),
 		newCellNameToCoordinatesError("A", newInvalidCellNameError("A")).Error())
 
 	assert.NoError(t, f.SetCellInt("Sheet2", "A1", 100))
@@ -83,7 +83,7 @@ func TestOpenFile(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = f.GetCellFormula("Sheet2", "I11")
 	assert.NoError(t, err)
-	getSharedForumula(&xlsxWorksheet{}, 0, "")
+	getSharedFormula(&xlsxWorksheet{}, 0, "")
 
 	// Test read cell value with given illegal rows number.
 	_, err = f.GetCellValue("Sheet2", "a-1")
@@ -109,7 +109,7 @@ func TestOpenFile(t *testing.T) {
 	assert.NoError(t, f.SetCellValue("Sheet2", "F5", int32(1<<32/2-1)))
 	assert.NoError(t, f.SetCellValue("Sheet2", "F6", int64(1<<32/2-1)))
 	assert.NoError(t, f.SetCellValue("Sheet2", "F7", float32(42.65418)))
-	assert.NoError(t, f.SetCellValue("Sheet2", "F8", float64(-42.65418)))
+	assert.NoError(t, f.SetCellValue("Sheet2", "F8", -42.65418))
 	assert.NoError(t, f.SetCellValue("Sheet2", "F9", float32(42)))
 	assert.NoError(t, f.SetCellValue("Sheet2", "F10", float64(42)))
 	assert.NoError(t, f.SetCellValue("Sheet2", "F11", uint(1<<32-1)))
@@ -130,14 +130,17 @@ func TestOpenFile(t *testing.T) {
 	// Test boolean write
 	booltest := []struct {
 		value    bool
+		raw      bool
 		expected string
 	}{
-		{false, "0"},
-		{true, "1"},
+		{false, true, "0"},
+		{true, true, "1"},
+		{false, false, "FALSE"},
+		{true, false, "TRUE"},
 	}
 	for _, test := range booltest {
 		assert.NoError(t, f.SetCellValue("Sheet2", "F16", test.value))
-		val, err := f.GetCellValue("Sheet2", "F16")
+		val, err := f.GetCellValue("Sheet2", "F16", Options{RawCellValue: test.raw})
 		assert.NoError(t, err)
 		assert.Equal(t, test.expected, val)
 	}
@@ -147,6 +150,7 @@ func TestOpenFile(t *testing.T) {
 	assert.NoError(t, f.SetCellValue("Sheet2", "G4", time.Now()))
 
 	assert.NoError(t, f.SetCellValue("Sheet2", "G4", time.Now().UTC()))
+	assert.EqualError(t, f.SetCellValue("SheetN", "A1", time.Now()), "sheet SheetN is not exist")
 	// 02:46:40
 	assert.NoError(t, f.SetCellValue("Sheet2", "G5", time.Duration(1e13)))
 	// Test completion column.
@@ -175,7 +179,10 @@ func TestSaveFile(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestSaveFile.xlsx")))
+	assert.EqualError(t, f.SaveAs(filepath.Join("test", "TestSaveFile.xlsb")), ErrWorkbookExt.Error())
+	for _, ext := range []string{".xlam", ".xlsm", ".xlsx", ".xltm", ".xltx"} {
+		assert.NoError(t, f.SaveAs(filepath.Join("test", fmt.Sprintf("TestSaveFile%s", ext))))
+	}
 	assert.NoError(t, f.Close())
 	f, err = OpenFile(filepath.Join("test", "TestSaveFile.xlsx"))
 	if !assert.NoError(t, err) {
@@ -189,7 +196,7 @@ func TestSaveAsWrongPath(t *testing.T) {
 	f, err := OpenFile(filepath.Join("test", "Book1.xlsx"))
 	assert.NoError(t, err)
 	// Test write file to not exist directory.
-	assert.EqualError(t, f.SaveAs(""), "open .: is a directory")
+	assert.Error(t, f.SaveAs(filepath.Join("x", "Book1.xlsx")))
 	assert.NoError(t, f.Close())
 }
 
@@ -224,7 +231,7 @@ func TestOpenReader(t *testing.T) {
 	assert.Equal(t, "SECRET", val)
 	assert.NoError(t, f.Close())
 
-	// Test open spreadsheet with invalid optioins.
+	// Test open spreadsheet with invalid options.
 	_, err = OpenReader(bytes.NewReader(oleIdentifier), Options{UnzipSizeLimit: 1, UnzipXMLSizeLimit: 2})
 	assert.EqualError(t, err, ErrOptionsUnzipSizeLimit.Error())
 
@@ -1065,7 +1072,7 @@ func TestConditionalFormat(t *testing.T) {
 	// Set conditional format with illegal criteria type.
 	assert.NoError(t, f.SetConditionalFormat(sheet1, "K1:K10", `[{"type":"data_bar", "criteria":"", "min_type":"min","max_type":"max","bar_color":"#638EC6"}]`))
 
-	// Set conditional format with file without dxfs element shold not return error.
+	// Set conditional format with file without dxfs element should not return error.
 	f, err = OpenFile(filepath.Join("test", "Book1.xlsx"))
 	if !assert.NoError(t, err) {
 		t.FailNow()
@@ -1150,9 +1157,9 @@ func TestHSL(t *testing.T) {
 	assert.Equal(t, 0.0, hueToRGB(0, 0, 2.0/4))
 	t.Log(RGBToHSL(255, 255, 0))
 	h, s, l := RGBToHSL(0, 255, 255)
-	assert.Equal(t, float64(0.5), h)
-	assert.Equal(t, float64(1), s)
-	assert.Equal(t, float64(0.5), l)
+	assert.Equal(t, 0.5, h)
+	assert.Equal(t, 1.0, s)
+	assert.Equal(t, 0.5, l)
 	t.Log(RGBToHSL(250, 100, 50))
 	t.Log(RGBToHSL(50, 100, 250))
 	t.Log(RGBToHSL(250, 50, 100))
@@ -1160,13 +1167,44 @@ func TestHSL(t *testing.T) {
 
 func TestProtectSheet(t *testing.T) {
 	f := NewFile()
-	assert.NoError(t, f.ProtectSheet("Sheet1", nil))
-	assert.NoError(t, f.ProtectSheet("Sheet1", &FormatSheetProtection{
+	sheetName := f.GetSheetName(0)
+	assert.NoError(t, f.ProtectSheet(sheetName, nil))
+	// Test protect worksheet with XOR hash algorithm
+	assert.NoError(t, f.ProtectSheet(sheetName, &FormatSheetProtection{
 		Password:      "password",
 		EditScenarios: false,
 	}))
-
+	ws, err := f.workSheetReader(sheetName)
+	assert.NoError(t, err)
+	assert.Equal(t, "83AF", ws.SheetProtection.Password)
 	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestProtectSheet.xlsx")))
+	// Test protect worksheet with SHA-512 hash algorithm
+	assert.NoError(t, f.ProtectSheet(sheetName, &FormatSheetProtection{
+		AlgorithmName: "SHA-512",
+		Password:      "password",
+	}))
+	ws, err = f.workSheetReader(sheetName)
+	assert.NoError(t, err)
+	assert.Equal(t, 24, len(ws.SheetProtection.SaltValue))
+	assert.Equal(t, 88, len(ws.SheetProtection.HashValue))
+	assert.Equal(t, int(sheetProtectionSpinCount), ws.SheetProtection.SpinCount)
+	// Test remove sheet protection with an incorrect password
+	assert.EqualError(t, f.UnprotectSheet(sheetName, "wrongPassword"), ErrUnprotectSheetPassword.Error())
+	// Test remove sheet protection with password verification
+	assert.NoError(t, f.UnprotectSheet(sheetName, "password"))
+	// Test protect worksheet with empty password
+	assert.NoError(t, f.ProtectSheet(sheetName, &FormatSheetProtection{}))
+	assert.Equal(t, "", ws.SheetProtection.Password)
+	// Test protect worksheet with password exceeds the limit length
+	assert.EqualError(t, f.ProtectSheet(sheetName, &FormatSheetProtection{
+		AlgorithmName: "MD4",
+		Password:      strings.Repeat("s", MaxFieldLength+1),
+	}), ErrPasswordLengthInvalid.Error())
+	// Test protect worksheet with unsupported hash algorithm
+	assert.EqualError(t, f.ProtectSheet(sheetName, &FormatSheetProtection{
+		AlgorithmName: "RIPEMD-160",
+		Password:      "password",
+	}), ErrUnsupportedHashAlgorithm.Error())
 	// Test protect not exists worksheet.
 	assert.EqualError(t, f.ProtectSheet("SheetN", nil), "sheet SheetN is not exist")
 }
@@ -1176,12 +1214,30 @@ func TestUnprotectSheet(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	// Test unprotect not exists worksheet.
+	// Test remove protection on not exists worksheet.
 	assert.EqualError(t, f.UnprotectSheet("SheetN"), "sheet SheetN is not exist")
 
 	assert.NoError(t, f.UnprotectSheet("Sheet1"))
+	assert.EqualError(t, f.UnprotectSheet("Sheet1", "password"), ErrUnprotectSheet.Error())
 	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestUnprotectSheet.xlsx")))
 	assert.NoError(t, f.Close())
+
+	f = NewFile()
+	sheetName := f.GetSheetName(0)
+	assert.NoError(t, f.ProtectSheet(sheetName, &FormatSheetProtection{Password: "password"}))
+	// Test remove sheet protection with an incorrect password
+	assert.EqualError(t, f.UnprotectSheet(sheetName, "wrongPassword"), ErrUnprotectSheetPassword.Error())
+	// Test remove sheet protection with password verification
+	assert.NoError(t, f.UnprotectSheet(sheetName, "password"))
+	// Test with invalid salt value
+	assert.NoError(t, f.ProtectSheet(sheetName, &FormatSheetProtection{
+		AlgorithmName: "SHA-512",
+		Password:      "password",
+	}))
+	ws, err := f.workSheetReader(sheetName)
+	assert.NoError(t, err)
+	ws.SheetProtection.SaltValue = "YWJjZA====="
+	assert.EqualError(t, f.UnprotectSheet(sheetName, "wrongPassword"), "illegal base64 data at input byte 8")
 }
 
 func TestSetDefaultTimeStyle(t *testing.T) {
@@ -1256,7 +1312,8 @@ func TestDeleteSheetFromWorkbookRels(t *testing.T) {
 
 func TestAttrValToInt(t *testing.T) {
 	_, err := attrValToInt("r", []xml.Attr{
-		{Name: xml.Name{Local: "r"}, Value: "s"}})
+		{Name: xml.Name{Local: "r"}, Value: "s"},
+	})
 	assert.EqualError(t, err, `strconv.Atoi: parsing "s": invalid syntax`)
 }
 
