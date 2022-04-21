@@ -25,10 +25,6 @@ func parseFormatShapeSet(formatSet string) (*formatShape, error) {
 		Height: 160,
 		Format: formatPicture{
 			FPrintsWithSheet: true,
-			FLocksWithSheet:  false,
-			NoChangeAspect:   false,
-			OffsetX:          0,
-			OffsetY:          0,
 			XScale:           1.0,
 			YScale:           1.0,
 		},
@@ -369,6 +365,7 @@ func (f *File) addDrawingShape(sheet, drawingXML, cell string, formatSet *format
 	twoCellAnchor.From = &from
 	twoCellAnchor.To = &to
 	shape := xdrSp{
+		Macro: formatSet.Macro,
 		NvSpPr: &xdrNvSpPr{
 			CNvPr: &xlsxCNvPr{
 				ID:   cNvPrID,

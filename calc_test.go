@@ -120,6 +120,45 @@ func TestCalcCellValue(t *testing.T) {
 		"=COMPLEX(0,-2)":        "-2i",
 		"=COMPLEX(0,0)":         "0",
 		"=COMPLEX(0,-1,\"j\")":  "-j",
+		// CONVERT
+		"=CONVERT(20.2,\"m\",\"yd\")":                    "22.0909886264217",
+		"=CONVERT(20.2,\"cm\",\"yd\")":                   "0.220909886264217",
+		"=CONVERT(0.2,\"gal\",\"tsp\")":                  "153.6",
+		"=CONVERT(5,\"gal\",\"l\")":                      "18.92705892",
+		"=CONVERT(0.02,\"Gm\",\"m\")":                    "20000000",
+		"=CONVERT(0,\"C\",\"F\")":                        "32",
+		"=CONVERT(1,\"ly^2\",\"ly^2\")":                  "1",
+		"=CONVERT(0.00194255938572296,\"sg\",\"ozm\")":   "1",
+		"=CONVERT(5,\"kg\",\"kg\")":                      "5",
+		"=CONVERT(4.5359237E-01,\"kg\",\"lbm\")":         "1",
+		"=CONVERT(0.2,\"kg\",\"hg\")":                    "2",
+		"=CONVERT(12.345000000000001,\"km\",\"m\")":      "12345",
+		"=CONVERT(12345,\"m\",\"km\")":                   "12.345",
+		"=CONVERT(0.621371192237334,\"mi\",\"km\")":      "1",
+		"=CONVERT(1.23450000000000E+05,\"ang\",\"um\")":  "12.345",
+		"=CONVERT(1.23450000000000E+02,\"kang\",\"um\")": "12.345",
+		"=CONVERT(1000,\"dal\",\"hl\")":                  "100",
+		"=CONVERT(1,\"yd\",\"ft\")":                      "2.99999999999999",
+		"=CONVERT(20,\"C\",\"F\")":                       "68",
+		"=CONVERT(68,\"F\",\"C\")":                       "20",
+		"=CONVERT(293.15,\"K\",\"F\")":                   "68",
+		"=CONVERT(68,\"F\",\"K\")":                       "293.15",
+		"=CONVERT(-273.15,\"C\",\"K\")":                  "0",
+		"=CONVERT(-459.67,\"F\",\"K\")":                  "0",
+		"=CONVERT(295.65,\"K\",\"C\")":                   "22.5",
+		"=CONVERT(22.5,\"C\",\"K\")":                     "295.65",
+		"=CONVERT(1667.85,\"C\",\"K\")":                  "1941",
+		"=CONVERT(3034.13,\"F\",\"K\")":                  "1941",
+		"=CONVERT(3493.8,\"Rank\",\"K\")":                "1941",
+		"=CONVERT(1334.28,\"Reau\",\"K\")":               "1941",
+		"=CONVERT(1941,\"K\",\"Rank\")":                  "3493.8",
+		"=CONVERT(1941,\"K\",\"Reau\")":                  "1334.28",
+		"=CONVERT(123.45,\"K\",\"kel\")":                 "123.45",
+		"=CONVERT(123.45,\"C\",\"cel\")":                 "123.45",
+		"=CONVERT(123.45,\"F\",\"fah\")":                 "123.45",
+		"=CONVERT(16,\"bit\",\"byte\")":                  "2",
+		"=CONVERT(1,\"kbyte\",\"byte\")":                 "1000",
+		"=CONVERT(1,\"kibyte\",\"byte\")":                "1024",
 		// DEC2BIN
 		"=DEC2BIN(2)":    "10",
 		"=DEC2BIN(3)":    "11",
@@ -571,6 +610,10 @@ func TestCalcCellValue(t *testing.T) {
 		"=IMPRODUCT(\"1-i\",\"5+10i\",2)":       "30+10i",
 		"=IMPRODUCT(COMPLEX(5,2),COMPLEX(0,1))": "-2+5i",
 		"=IMPRODUCT(A1:C1)":                     "4",
+		// MINVERSE
+		"=MINVERSE(A1:B2)": "-0",
+		// MMULT
+		"=MMULT(A4:A4,A4:A4)": "0",
 		// MOD
 		"=MOD(6,4)":        "2",
 		"=MOD(6,3)":        "0",
@@ -593,7 +636,7 @@ func TestCalcCellValue(t *testing.T) {
 		`=MULTINOMIAL("",3,1,2,5)`:     "27720",
 		"=MULTINOMIAL(MULTINOMIAL(1))": "1",
 		// _xlfn.MUNIT
-		"=_xlfn.MUNIT(4)": "",
+		"=_xlfn.MUNIT(4)": "1",
 		// ODD
 		"=ODD(22)":     "23",
 		"=ODD(1.22)":   "3",
@@ -1091,6 +1134,8 @@ func TestCalcCellValue(t *testing.T) {
 		"=MINA(A1:B4,MUNIT(1),INT(0),1,E1:F2,\"\")": "0",
 		// MINIFS
 		"=MINIFS(F2:F4,A2:A4,\">0\")": "22100",
+		// PEARSON
+		"=PEARSON(A1:A4,B1:B4)": "1",
 		// PERCENTILE.EXC
 		"=PERCENTILE.EXC(A1:A4,0.2)": "0",
 		"=PERCENTILE.EXC(A1:A4,0.6)": "2",
@@ -1145,10 +1190,18 @@ func TestCalcCellValue(t *testing.T) {
 		"=RANK.EQ(1,A1:B5)":   "5",
 		"=RANK.EQ(1,A1:B5,0)": "5",
 		"=RANK.EQ(1,A1:B5,1)": "2",
+		// RSQ
+		"=RSQ(A1:A4,B1:B4)": "1",
 		// SKEW
 		"=SKEW(1,2,3,4,3)": "-0.404796008910937",
 		"=SKEW(A1:B2)":     "0",
 		"=SKEW(A1:D3)":     "0",
+		// SKEW.P
+		"=SKEW.P(1,2,3,4,3)": "-0.27154541788364",
+		"=SKEW.P(A1:B2)":     "0",
+		"=SKEW.P(A1:D3)":     "0",
+		// SLOPE
+		"=SLOPE(A1:A4,B1:B4)": "1",
 		// SMALL
 		"=SMALL(A1:A5,1)": "0",
 		"=SMALL(A1:B5,2)": "1",
@@ -1162,6 +1215,10 @@ func TestCalcCellValue(t *testing.T) {
 		"=STDEVP(A1:B2,6,-1)": "2.40947204913349",
 		// STDEV.P
 		"=STDEV.P(A1:B2,6,-1)": "2.40947204913349",
+		// STDEVPA
+		"=STDEVPA(1,3,5,2)":               "1.4790199457749",
+		"=STDEVPA(1,3,5,2,1,0)":           "1.63299316185545",
+		"=STDEVPA(1,3,5,2,TRUE,\"text\")": "1.63299316185545",
 		// T.DIST
 		"=T.DIST(1,10,TRUE)":   "0.82955343384897",
 		"=T.DIST(-1,10,TRUE)":  "0.17044656615103",
@@ -1190,8 +1247,8 @@ func TestCalcCellValue(t *testing.T) {
 		"=VAR(1,3,5,0,C1)":      "4.91666666666667",
 		"=VAR(1,3,5,0,C1,TRUE)": "4",
 		// VARA
-		"=VARA(1,3,5,0,C1)":      "4.7",
-		"=VARA(1,3,5,0,C1,TRUE)": "3.86666666666667",
+		"=VARA(1,3,5,0,C1)":      "4.91666666666667",
+		"=VARA(1,3,5,0,C1,TRUE)": "4",
 		// VARP
 		"=VARP(A1:A5)":           "1.25",
 		"=VARP(1,3,5,0,C1,TRUE)": "3.2",
@@ -1201,8 +1258,8 @@ func TestCalcCellValue(t *testing.T) {
 		"=VAR.S(1,3,5,0,C1)":      "4.91666666666667",
 		"=VAR.S(1,3,5,0,C1,TRUE)": "4",
 		// VARPA
-		"=VARPA(1,3,5,0,C1)":      "3.76",
-		"=VARPA(1,3,5,0,C1,TRUE)": "3.22222222222222",
+		"=VARPA(1,3,5,0,C1)":      "3.6875",
+		"=VARPA(1,3,5,0,C1,TRUE)": "3.2",
 		// WEIBULL
 		"=WEIBULL(1,3,1,FALSE)":  "1.10363832351433",
 		"=WEIBULL(2,5,1.5,TRUE)": "0.985212776817482",
@@ -1996,6 +2053,21 @@ func TestCalcCellValue(t *testing.T) {
 		"=COMPLEX(\"\",0)":        "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=COMPLEX(0,\"\")":        "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=COMPLEX(10,-5,\"i\",0)": "COMPLEX allows at most 3 arguments",
+		// CONVERT
+		"=CONVERT()":                          "CONVERT requires 3 arguments",
+		"=CONVERT(\"\",\"m\",\"yd\")":         "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=CONVERT(20.2,\"m\",\"C\")":          "#N/A",
+		"=CONVERT(20.2,\"\",\"C\")":           "#N/A",
+		"=CONVERT(100,\"dapt\",\"pt\")":       "#N/A",
+		"=CONVERT(1,\"ft\",\"day\")":          "#N/A",
+		"=CONVERT(234.56,\"kpt\",\"lt\")":     "#N/A",
+		"=CONVERT(234.56,\"lt\",\"kpt\")":     "#N/A",
+		"=CONVERT(234.56,\"kiqt\",\"pt\")":    "#N/A",
+		"=CONVERT(234.56,\"pt\",\"kiqt\")":    "#N/A",
+		"=CONVERT(12345.6,\"baton\",\"cwt\")": "#N/A",
+		"=CONVERT(12345.6,\"cwt\",\"baton\")": "#N/A",
+		"=CONVERT(234.56,\"xxxx\",\"m\")":     "#N/A",
+		"=CONVERT(234.56,\"m\",\"xxxx\")":     "#N/A",
 		// DEC2BIN
 		"=DEC2BIN()":        "DEC2BIN requires at least 1 argument",
 		"=DEC2BIN(1,1,1)":   "DEC2BIN allows at most 2 arguments",
@@ -2332,7 +2404,17 @@ func TestCalcCellValue(t *testing.T) {
 		"=LOG10()":    "LOG10 requires 1 numeric argument",
 		`=LOG10("X")`: "strconv.ParseFloat: parsing \"X\": invalid syntax",
 		// MDETERM
-		"MDETERM()": "MDETERM requires at least 1 argument",
+		"=MDETERM()": "MDETERM requires 1 argument",
+		// MINVERSE
+		"=MINVERSE()":      "MINVERSE requires 1 argument",
+		"=MINVERSE(B3:C4)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=MINVERSE(A1:C2)": "#VALUE!",
+		"=MINVERSE(A4:A4)": "#NUM!",
+		// MMULT
+		"=MMULT()":            "MMULT requires 2 argument",
+		"=MMULT(A1:B2,B3:C4)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=MMULT(B3:C4,A1:B2)": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=MMULT(A1:A2,B1:B2)": "#VALUE!",
 		// MOD
 		"=MOD()":      "MOD requires 2 numeric arguments",
 		"=MOD(6,0)":   "MOD divide by zero",
@@ -2956,6 +3038,10 @@ func TestCalcCellValue(t *testing.T) {
 		// MINIFS
 		"=MINIFS()":                         "MINIFS requires at least 3 arguments",
 		"=MINIFS(F2:F4,A2:A4,\"<0\",D2:D9)": "#N/A",
+		// PEARSON
+		"=PEARSON()":            "PEARSON requires 2 arguments",
+		"=PEARSON(A1:A2,B1:B1)": "#N/A",
+		"=PEARSON(A4,A4)":       "#DIV/0!",
 		// PERCENTILE.EXC
 		"=PERCENTILE.EXC()":           "PERCENTILE.EXC requires 2 arguments",
 		"=PERCENTILE.EXC(A1:A4,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
@@ -3029,10 +3115,22 @@ func TestCalcCellValue(t *testing.T) {
 		"=RANK.EQ(-1,A1:B5)":     "#N/A",
 		"=RANK.EQ(\"\",A1:B5)":   "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=RANK.EQ(1,A1:B5,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		// RSQ
+		"=RSQ()":            "RSQ requires 2 arguments",
+		"=RSQ(A1:A2,B1:B1)": "#N/A",
+		"=RSQ(A4,A4)":       "#DIV/0!",
 		// SKEW
 		"=SKEW()":     "SKEW requires at least 1 argument",
 		"=SKEW(\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=SKEW(0)":    "#DIV/0!",
+		// SKEW.P
+		"=SKEW.P()":     "SKEW.P requires at least 1 argument",
+		"=SKEW.P(\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=SKEW.P(0)":    "#DIV/0!",
+		// SLOPE
+		"=SLOPE()":            "SLOPE requires 2 arguments",
+		"=SLOPE(A1:A2,B1:B1)": "#N/A",
+		"=SLOPE(A4,A4)":       "#DIV/0!",
 		// SMALL
 		"=SMALL()":           "SMALL requires 2 arguments",
 		"=SMALL(A1:A5,0)":    "k should be > 0",
@@ -3050,6 +3148,9 @@ func TestCalcCellValue(t *testing.T) {
 		// STDEV.P
 		"=STDEV.P()":     "STDEV.P requires at least 1 argument",
 		"=STDEV.P(\"\")": "#DIV/0!",
+		// STDEVPA
+		"=STDEVPA()":     "STDEVPA requires at least 1 argument",
+		"=STDEVPA(\"\")": "#DIV/0!",
 		// T.DIST
 		"=T.DIST()":             "T.DIST requires 3 arguments",
 		"=T.DIST(\"\",10,TRUE)": "strconv.ParseFloat: parsing \"\": invalid syntax",
@@ -4361,6 +4462,8 @@ func TestCalcCOVAR(t *testing.T) {
 		"=COVAR(A2:A9,B2:B9)":        "16.633125",
 		"=COVARIANCE.P(A1:A9,B1:B9)": "16.633125",
 		"=COVARIANCE.P(A2:A9,B2:B9)": "16.633125",
+		"=COVARIANCE.S(A1:A9,B1:B9)": "19.0092857142857",
+		"=COVARIANCE.S(A2:A9,B2:B9)": "19.0092857142857",
 	}
 	for formula, expected := range formulaList {
 		assert.NoError(t, f.SetCellFormula("Sheet1", "C1", formula))
@@ -4373,6 +4476,8 @@ func TestCalcCOVAR(t *testing.T) {
 		"=COVAR(A2:A9,B3:B3)":        "#N/A",
 		"=COVARIANCE.P()":            "COVARIANCE.P requires 2 arguments",
 		"=COVARIANCE.P(A2:A9,B3:B3)": "#N/A",
+		"=COVARIANCE.S()":            "COVARIANCE.S requires 2 arguments",
+		"=COVARIANCE.S(A2:A9,B3:B3)": "#N/A",
 	}
 	for formula, expected := range calcError {
 		assert.NoError(t, f.SetCellFormula("Sheet1", "C1", formula))
@@ -4390,6 +4495,83 @@ func TestCalcFORMULATEXT(t *testing.T) {
 		result, err := f.CalcCellValue("Sheet1", "D1")
 		assert.NoError(t, err, formula)
 		assert.Equal(t, formulaText, result, formula)
+	}
+}
+
+func TestCalcGROWTHandTREND(t *testing.T) {
+	cellData := [][]interface{}{
+		{"known_x's", "known_y's", 0, -1},
+		{1, 10, 1},
+		{2, 20, 1},
+		{3, 40},
+		{4, 80},
+		{},
+		{"new_x's", "new_y's"},
+		{5},
+		{6},
+		{7},
+	}
+	f := prepareCalcData(cellData)
+	formulaList := map[string]string{
+		"=GROWTH(A2:B2)":                    "1",
+		"=GROWTH(B2:B5,A2:A5,A8:A10)":       "160",
+		"=GROWTH(B2:B5,A2:A5,A8:A10,FALSE)": "467.84375",
+		"=GROWTH(A4:A5,A2:B3,A8:A10,FALSE)": "",
+		"=GROWTH(A3:A5,A2:B4,A2:B3)":        "2",
+		"=GROWTH(A4:A5,A2:B3)":              "",
+		"=GROWTH(A2:B2,A2:B3)":              "",
+		"=GROWTH(A2:B2,A2:B3,A2:B3,FALSE)":  "1.28399658203125",
+		"=GROWTH(A2:B2,A4:B5,A4:B5,FALSE)":  "1",
+		"=GROWTH(A3:C3,A2:C3,A2:B3)":        "2",
+		"=TREND(A2:B2)":                     "1",
+		"=TREND(B2:B5,A2:A5,A8:A10)":        "95",
+		"=TREND(B2:B5,A2:A5,A8:A10,FALSE)":  "81.66796875",
+		"=TREND(A4:A5,A2:B3,A8:A10,FALSE)":  "",
+		"=TREND(A4:A5,A2:B3,A2:B3,FALSE)":   "1.5",
+		"=TREND(A3:A5,A2:B4,A2:B3)":         "2",
+		"=TREND(A4:A5,A2:B3)":               "",
+		"=TREND(A2:B2,A2:B3)":               "",
+		"=TREND(A2:B2,A2:B3,A2:B3,FALSE)":   "1",
+		"=TREND(A2:B2,A4:B5,A4:B5,FALSE)":   "1",
+		"=TREND(A3:C3,A2:C3,A2:B3)":         "2",
+	}
+	for formula, expected := range formulaList {
+		assert.NoError(t, f.SetCellFormula("Sheet1", "C1", formula))
+		result, err := f.CalcCellValue("Sheet1", "C1")
+		assert.NoError(t, err, formula)
+		assert.Equal(t, expected, result, formula)
+	}
+	calcError := map[string]string{
+		"=GROWTH()":                          "GROWTH requires at least 1 argument",
+		"=GROWTH(B2:B5,A2:A5,A8:A10,TRUE,0)": "GROWTH allows at most 4 arguments",
+		"=GROWTH(A1:B1,A2:A5,A8:A10,TRUE)":   "strconv.ParseFloat: parsing \"known_x's\": invalid syntax",
+		"=GROWTH(B2:B5,A1:B1,A8:A10,TRUE)":   "strconv.ParseFloat: parsing \"known_x's\": invalid syntax",
+		"=GROWTH(B2:B5,A2:A5,A1:B1,TRUE)":    "strconv.ParseFloat: parsing \"known_x's\": invalid syntax",
+		"=GROWTH(B2:B5,A2:A5,A8:A10,\"\")":   "strconv.ParseBool: parsing \"\": invalid syntax",
+		"=GROWTH(A2:B3,A4:B4)":               "#REF!",
+		"=GROWTH(A4:B4,A2:A2)":               "#REF!",
+		"=GROWTH(A2:A2,A4:A5)":               "#REF!",
+		"=GROWTH(C1:C1,A2:A3)":               "#NUM!",
+		"=GROWTH(D1:D1,A2:A3)":               "#NUM!",
+		"=GROWTH(A2:A3,C1:C1)":               "#NUM!",
+		"=TREND()":                           "TREND requires at least 1 argument",
+		"=TREND(B2:B5,A2:A5,A8:A10,TRUE,0)":  "TREND allows at most 4 arguments",
+		"=TREND(A1:B1,A2:A5,A8:A10,TRUE)":    "strconv.ParseFloat: parsing \"known_x's\": invalid syntax",
+		"=TREND(B2:B5,A1:B1,A8:A10,TRUE)":    "strconv.ParseFloat: parsing \"known_x's\": invalid syntax",
+		"=TREND(B2:B5,A2:A5,A1:B1,TRUE)":     "strconv.ParseFloat: parsing \"known_x's\": invalid syntax",
+		"=TREND(B2:B5,A2:A5,A8:A10,\"\")":    "strconv.ParseBool: parsing \"\": invalid syntax",
+		"=TREND(A2:B3,A4:B4)":                "#REF!",
+		"=TREND(A4:B4,A2:A2)":                "#REF!",
+		"=TREND(A2:A2,A4:A5)":                "#REF!",
+		"=TREND(C1:C1,A2:A3)":                "#NUM!",
+		"=TREND(D1:D1,A2:A3)":                "#REF!",
+		"=TREND(A2:A3,C1:C1)":                "#NUM!",
+	}
+	for formula, expected := range calcError {
+		assert.NoError(t, f.SetCellFormula("Sheet1", "C1", formula))
+		result, err := f.CalcCellValue("Sheet1", "C1")
+		assert.EqualError(t, err, expected, formula)
+		assert.Equal(t, "", result, formula)
 	}
 }
 
@@ -4902,7 +5084,7 @@ func TestCalcMODE(t *testing.T) {
 	formulaList := map[string]string{
 		"=MODE(A1:A10)":      "3",
 		"=MODE(B1:B6)":       "2",
-		"=MODE.MULT(A1:A10)": "",
+		"=MODE.MULT(A1:A10)": "3",
 		"=MODE.SNGL(A1:A10)": "3",
 		"=MODE.SNGL(B1:B6)":  "2",
 	}
@@ -4928,6 +5110,89 @@ func TestCalcMODE(t *testing.T) {
 		result, err := f.CalcCellValue("Sheet1", "C1")
 		assert.EqualError(t, err, expected, formula)
 		assert.Equal(t, "", result, formula)
+	}
+}
+
+func TestCalcPEARSON(t *testing.T) {
+	cellData := [][]interface{}{
+		{"x", "y"},
+		{1, 10.11},
+		{2, 22.9},
+		{2, 27.61},
+		{3, 27.61},
+		{4, 11.15},
+		{5, 31.08},
+		{6, 37.9},
+		{7, 33.49},
+		{8, 21.05},
+		{9, 27.01},
+		{10, 45.78},
+		{11, 31.32},
+		{12, 50.57},
+		{13, 45.48},
+		{14, 40.94},
+		{15, 53.76},
+		{16, 36.18},
+		{17, 49.77},
+		{18, 55.66},
+		{19, 63.83},
+		{20, 63.6},
+	}
+	f := prepareCalcData(cellData)
+	formulaList := map[string]string{
+		"=PEARSON(A2:A22,B2:B22)": "0.864129542184994",
+	}
+	for formula, expected := range formulaList {
+		assert.NoError(t, f.SetCellFormula("Sheet1", "C1", formula))
+		result, err := f.CalcCellValue("Sheet1", "C1")
+		assert.NoError(t, err, formula)
+		assert.Equal(t, expected, result, formula)
+	}
+}
+
+func TestCalcRSQ(t *testing.T) {
+	cellData := [][]interface{}{
+		{"known_y's", "known_x's"},
+		{2, 22.9},
+		{7, 33.49},
+		{8, 34.5},
+		{3, 27.61},
+		{4, 19.5},
+		{1, 10.11},
+		{6, 37.9},
+		{5, 31.08},
+	}
+	f := prepareCalcData(cellData)
+	formulaList := map[string]string{
+		"=RSQ(A2:A9,B2:B9)": "0.711666290486784",
+	}
+	for formula, expected := range formulaList {
+		assert.NoError(t, f.SetCellFormula("Sheet1", "C1", formula))
+		result, err := f.CalcCellValue("Sheet1", "C1")
+		assert.NoError(t, err, formula)
+		assert.Equal(t, expected, result, formula)
+	}
+}
+
+func TestCalcSLOP(t *testing.T) {
+	cellData := [][]interface{}{
+		{"known_x's", "known_y's"},
+		{1, 3},
+		{2, 7},
+		{3, 17},
+		{4, 20},
+		{5, 20},
+		{6, 27},
+	}
+	f := prepareCalcData(cellData)
+	formulaList := map[string]string{
+		"=SLOPE(A2:A7,B2:B7)": "0.200826446280992",
+	}
+	for formula, expected := range formulaList {
+		assert.NoError(t, f.SetCellFormula("Sheet1", "C1", formula))
+		result, err := f.CalcCellValue("Sheet1", "C1")
+		assert.NoError(t, err, formula)
+		assert.Equal(t, expected, result, formula)
 	}
 }
 

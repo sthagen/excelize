@@ -58,6 +58,20 @@ const (
 	criteriaErr
 	criteriaRegexp
 
+	catgoryWeightAndMass
+	catgoryDistance
+	catgoryTime
+	catgoryPressure
+	catgoryForce
+	catgoryEnergy
+	catgoryPower
+	catgoryMagnetism
+	catgoryTemperature
+	catgoryVolumeAndLiquidMeasure
+	catgoryArea
+	catgoryInformation
+	catgorySpeed
+
 	matchModeExact      = 0
 	matchModeMinGreater = 1
 	matchModeMaxLess    = -1
@@ -375,6 +389,7 @@ type formulaFuncs struct {
 //    CONFIDENCE
 //    CONFIDENCE.NORM
 //    CONFIDENCE.T
+//    CONVERT
 //    CORREL
 //    COS
 //    COSH
@@ -393,6 +408,7 @@ type formulaFuncs struct {
 //    COUPPCD
 //    COVAR
 //    COVARIANCE.P
+//    COVARIANCE.S
 //    CRITBINOM
 //    CSC
 //    CSCH
@@ -461,6 +477,7 @@ type formulaFuncs struct {
 //    GCD
 //    GEOMEAN
 //    GESTEP
+//    GROWTH
 //    HARMEAN
 //    HEX2BIN
 //    HEX2DEC
@@ -548,7 +565,9 @@ type formulaFuncs struct {
 //    MINA
 //    MINIFS
 //    MINUTE
+//    MINVERSE
 //    MIRR
+//    MMULT
 //    MOD
 //    MODE
 //    MODE.MULT
@@ -581,6 +600,7 @@ type formulaFuncs struct {
 //    ODDFPRICE
 //    OR
 //    PDURATION
+//    PEARSON
 //    PERCENTILE.EXC
 //    PERCENTILE.INC
 //    PERCENTILE
@@ -625,6 +645,7 @@ type formulaFuncs struct {
 //    ROW
 //    ROWS
 //    RRI
+//    RSQ
 //    SEC
 //    SECH
 //    SECOND
@@ -635,7 +656,9 @@ type formulaFuncs struct {
 //    SIN
 //    SINH
 //    SKEW
+//    SKEW.P
 //    SLN
+//    SLOPE
 //    SMALL
 //    SQRT
 //    SQRTPI
@@ -645,6 +668,7 @@ type formulaFuncs struct {
 //    STDEV.S
 //    STDEVA
 //    STDEVP
+//    STDEVPA
 //    SUBSTITUTE
 //    SUM
 //    SUMIF
@@ -674,6 +698,7 @@ type formulaFuncs struct {
 //    TINV
 //    TODAY
 //    TRANSPOSE
+//    TREND
 //    TRIM
 //    TRIMMEAN
 //    TRUE
@@ -952,7 +977,11 @@ func (f *File) evalInfixExpFunc(sheet, cell string, token, nextToken efp.Token, 
 			argsStack.Peek().(*list.List).PushBack(arg)
 		}
 	} else {
-		opdStack.Push(efp.Token{TValue: arg.Value(), TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
+		val := arg.Value()
+		if arg.Type == ArgMatrix && len(arg.Matrix) > 0 && len(arg.Matrix[0]) > 0 {
+			val = arg.Matrix[0][0].Value()
+		}
+		opdStack.Push(efp.Token{TValue: val, TType: efp.TokenTypeOperand, TSubType: efp.TokenSubTypeNumber})
 	}
 	return nil
 }
@@ -2007,7 +2036,6 @@ func (fn *formulaFuncs) COMPLEX(argsList *list.List) formulaArg {
 
 // cmplx2str replace complex number string characters.
 func cmplx2str(num complex128, suffix string) string {
-	c := fmt.Sprint(num)
 	realPart, imagPart := fmt.Sprint(real(num)), fmt.Sprint(imag(num))
 	isNum, i := isNumeric(realPart)
 	if isNum && i > 15 {
@@ -2017,7 +2045,7 @@ func cmplx2str(num complex128, suffix string) string {
 	if isNum && i > 15 {
 		imagPart = roundPrecision(imagPart, -1)
 	}
-	c = realPart
+	c := realPart
 	if imag(num) > 0 {
 		c += "+"
 	}
@@ -2048,6 +2076,529 @@ func str2cmplx(c string) string {
 	}
 	c = strings.NewReplacer("+i", "+1i", "-i", "-1i").Replace(c)
 	return c
+}
+
+// conversionUnit defined unit info for conversion.
+type conversionUnit struct {
+	group       uint8
+	allowPrefix bool
+}
+
+// conversionUnits maps info list for unit conversion, that can be used in
+// formula function CONVERT.
+var conversionUnits = map[string]conversionUnit{
+	// weight and mass
+	"g":        {group: catgoryWeightAndMass, allowPrefix: true},
+	"sg":       {group: catgoryWeightAndMass, allowPrefix: false},
+	"lbm":      {group: catgoryWeightAndMass, allowPrefix: false},
+	"u":        {group: catgoryWeightAndMass, allowPrefix: true},
+	"ozm":      {group: catgoryWeightAndMass, allowPrefix: false},
+	"grain":    {group: catgoryWeightAndMass, allowPrefix: false},
+	"cwt":      {group: catgoryWeightAndMass, allowPrefix: false},
+	"shweight": {group: catgoryWeightAndMass, allowPrefix: false},
+	"uk_cwt":   {group: catgoryWeightAndMass, allowPrefix: false},
+	"lcwt":     {group: catgoryWeightAndMass, allowPrefix: false},
+	"hweight":  {group: catgoryWeightAndMass, allowPrefix: false},
+	"stone":    {group: catgoryWeightAndMass, allowPrefix: false},
+	"ton":      {group: catgoryWeightAndMass, allowPrefix: false},
+	"uk_ton":   {group: catgoryWeightAndMass, allowPrefix: false},
+	"LTON":     {group: catgoryWeightAndMass, allowPrefix: false},
+	"brton":    {group: catgoryWeightAndMass, allowPrefix: false},
+	// distance
+	"m":         {group: catgoryDistance, allowPrefix: true},
+	"mi":        {group: catgoryDistance, allowPrefix: false},
+	"Nmi":       {group: catgoryDistance, allowPrefix: false},
+	"in":        {group: catgoryDistance, allowPrefix: false},
+	"ft":        {group: catgoryDistance, allowPrefix: false},
+	"yd":        {group: catgoryDistance, allowPrefix: false},
+	"ang":       {group: catgoryDistance, allowPrefix: true},
+	"ell":       {group: catgoryDistance, allowPrefix: false},
+	"ly":        {group: catgoryDistance, allowPrefix: false},
+	"parsec":    {group: catgoryDistance, allowPrefix: false},
+	"pc":        {group: catgoryDistance, allowPrefix: false},
+	"Pica":      {group: catgoryDistance, allowPrefix: false},
+	"Picapt":    {group: catgoryDistance, allowPrefix: false},
+	"pica":      {group: catgoryDistance, allowPrefix: false},
+	"survey_mi": {group: catgoryDistance, allowPrefix: false},
+	// time
+	"yr":  {group: catgoryTime, allowPrefix: false},
+	"day": {group: catgoryTime, allowPrefix: false},
+	"d":   {group: catgoryTime, allowPrefix: false},
+	"hr":  {group: catgoryTime, allowPrefix: false},
+	"mn":  {group: catgoryTime, allowPrefix: false},
+	"min": {group: catgoryTime, allowPrefix: false},
+	"sec": {group: catgoryTime, allowPrefix: true},
+	"s":   {group: catgoryTime, allowPrefix: true},
+	// pressure
+	"Pa":   {group: catgoryPressure, allowPrefix: true},
+	"p":    {group: catgoryPressure, allowPrefix: true},
+	"atm":  {group: catgoryPressure, allowPrefix: true},
+	"at":   {group: catgoryPressure, allowPrefix: true},
+	"mmHg": {group: catgoryPressure, allowPrefix: true},
+	"psi":  {group: catgoryPressure, allowPrefix: true},
+	"Torr": {group: catgoryPressure, allowPrefix: true},
+	// force
+	"N":    {group: catgoryForce, allowPrefix: true},
+	"dyn":  {group: catgoryForce, allowPrefix: true},
+	"dy":   {group: catgoryForce, allowPrefix: true},
+	"lbf":  {group: catgoryForce, allowPrefix: false},
+	"pond": {group: catgoryForce, allowPrefix: true},
+	// energy
+	"J":   {group: catgoryEnergy, allowPrefix: true},
+	"e":   {group: catgoryEnergy, allowPrefix: true},
+	"c":   {group: catgoryEnergy, allowPrefix: true},
+	"cal": {group: catgoryEnergy, allowPrefix: true},
+	"eV":  {group: catgoryEnergy, allowPrefix: true},
+	"ev":  {group: catgoryEnergy, allowPrefix: true},
+	"HPh": {group: catgoryEnergy, allowPrefix: false},
+	"hh":  {group: catgoryEnergy, allowPrefix: false},
+	"Wh":  {group: catgoryEnergy, allowPrefix: true},
+	"wh":  {group: catgoryEnergy, allowPrefix: true},
+	"flb": {group: catgoryEnergy, allowPrefix: false},
+	"BTU": {group: catgoryEnergy, allowPrefix: false},
+	"btu": {group: catgoryEnergy, allowPrefix: false},
+	// power
+	"HP": {group: catgoryPower, allowPrefix: false},
+	"h":  {group: catgoryPower, allowPrefix: false},
+	"W":  {group: catgoryPower, allowPrefix: true},
+	"w":  {group: catgoryPower, allowPrefix: true},
+	"PS": {group: catgoryPower, allowPrefix: false},
+	"T":  {group: catgoryMagnetism, allowPrefix: true},
+	"ga": {group: catgoryMagnetism, allowPrefix: true},
+	// temperature
+	"C":    {group: catgoryTemperature, allowPrefix: false},
+	"cel":  {group: catgoryTemperature, allowPrefix: false},
+	"F":    {group: catgoryTemperature, allowPrefix: false},
+	"fah":  {group: catgoryTemperature, allowPrefix: false},
+	"K":    {group: catgoryTemperature, allowPrefix: false},
+	"kel":  {group: catgoryTemperature, allowPrefix: false},
+	"Rank": {group: catgoryTemperature, allowPrefix: false},
+	"Reau": {group: catgoryTemperature, allowPrefix: false},
+	// volume
+	"l":        {group: catgoryVolumeAndLiquidMeasure, allowPrefix: true},
+	"L":        {group: catgoryVolumeAndLiquidMeasure, allowPrefix: true},
+	"lt":       {group: catgoryVolumeAndLiquidMeasure, allowPrefix: true},
+	"tsp":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"tspm":     {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"tbs":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"oz":       {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"cup":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"pt":       {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"us_pt":    {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"uk_pt":    {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"qt":       {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"uk_qt":    {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"gal":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"uk_gal":   {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"ang3":     {group: catgoryVolumeAndLiquidMeasure, allowPrefix: true},
+	"ang^3":    {group: catgoryVolumeAndLiquidMeasure, allowPrefix: true},
+	"barrel":   {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"bushel":   {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"in3":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"in^3":     {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"ft3":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"ft^3":     {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"ly3":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"ly^3":     {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"m3":       {group: catgoryVolumeAndLiquidMeasure, allowPrefix: true},
+	"m^3":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: true},
+	"mi3":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"mi^3":     {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"yd3":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"yd^3":     {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"Nmi3":     {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"Nmi^3":    {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"Pica3":    {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"Pica^3":   {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"Picapt3":  {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"Picapt^3": {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"GRT":      {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"regton":   {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	"MTON":     {group: catgoryVolumeAndLiquidMeasure, allowPrefix: false},
+	// area
+	"ha":       {group: catgoryArea, allowPrefix: true},
+	"uk_acre":  {group: catgoryArea, allowPrefix: false},
+	"us_acre":  {group: catgoryArea, allowPrefix: false},
+	"ang2":     {group: catgoryArea, allowPrefix: true},
+	"ang^2":    {group: catgoryArea, allowPrefix: true},
+	"ar":       {group: catgoryArea, allowPrefix: true},
+	"ft2":      {group: catgoryArea, allowPrefix: false},
+	"ft^2":     {group: catgoryArea, allowPrefix: false},
+	"in2":      {group: catgoryArea, allowPrefix: false},
+	"in^2":     {group: catgoryArea, allowPrefix: false},
+	"ly2":      {group: catgoryArea, allowPrefix: false},
+	"ly^2":     {group: catgoryArea, allowPrefix: false},
+	"m2":       {group: catgoryArea, allowPrefix: true},
+	"m^2":      {group: catgoryArea, allowPrefix: true},
+	"Morgen":   {group: catgoryArea, allowPrefix: false},
+	"mi2":      {group: catgoryArea, allowPrefix: false},
+	"mi^2":     {group: catgoryArea, allowPrefix: false},
+	"Nmi2":     {group: catgoryArea, allowPrefix: false},
+	"Nmi^2":    {group: catgoryArea, allowPrefix: false},
+	"Pica2":    {group: catgoryArea, allowPrefix: false},
+	"Pica^2":   {group: catgoryArea, allowPrefix: false},
+	"Picapt2":  {group: catgoryArea, allowPrefix: false},
+	"Picapt^2": {group: catgoryArea, allowPrefix: false},
+	"yd2":      {group: catgoryArea, allowPrefix: false},
+	"yd^2":     {group: catgoryArea, allowPrefix: false},
+	// information
+	"byte": {group: catgoryInformation, allowPrefix: true},
+	"bit":  {group: catgoryInformation, allowPrefix: true},
+	// speed
+	"m/s":   {group: catgorySpeed, allowPrefix: true},
+	"m/sec": {group: catgorySpeed, allowPrefix: true},
+	"m/h":   {group: catgorySpeed, allowPrefix: true},
+	"m/hr":  {group: catgorySpeed, allowPrefix: true},
+	"mph":   {group: catgorySpeed, allowPrefix: false},
+	"admkn": {group: catgorySpeed, allowPrefix: false},
+	"kn":    {group: catgorySpeed, allowPrefix: false},
+}
+
+// unitConversions maps details of the Units of measure conversion factors,
+// organised by group.
+var unitConversions = map[byte]map[string]float64{
+	// conversion uses gram (g) as an intermediate unit
+	catgoryWeightAndMass: {
+		"g":        1,
+		"sg":       6.85217658567918e-05,
+		"lbm":      2.20462262184878e-03,
+		"u":        6.02214179421676e+23,
+		"ozm":      3.52739619495804e-02,
+		"grain":    1.54323583529414e+01,
+		"cwt":      2.20462262184878e-05,
+		"shweight": 2.20462262184878e-05,
+		"uk_cwt":   1.96841305522212e-05,
+		"lcwt":     1.96841305522212e-05,
+		"hweight":  1.96841305522212e-05,
+		"stone":    1.57473044417770e-04,
+		"ton":      1.10231131092439e-06,
+		"uk_ton":   9.84206527611061e-07,
+		"LTON":     9.84206527611061e-07,
+		"brton":    9.84206527611061e-07,
+	},
+	// conversion uses meter (m) as an intermediate unit
+	catgoryDistance: {
+		"m":         1,
+		"mi":        6.21371192237334e-04,
+		"Nmi":       5.39956803455724e-04,
+		"in":        3.93700787401575e+01,
+		"ft":        3.28083989501312e+00,
+		"yd":        1.09361329833771e+00,
+		"ang":       1.0e+10,
+		"ell":       8.74890638670166e-01,
+		"ly":        1.05700083402462e-16,
+		"parsec":    3.24077928966473e-17,
+		"pc":        3.24077928966473e-17,
+		"Pica":      2.83464566929134e+03,
+		"Picapt":    2.83464566929134e+03,
+		"pica":      2.36220472440945e+02,
+		"survey_mi": 6.21369949494950e-04,
+	},
+	// conversion uses second (s) as an intermediate unit
+	catgoryTime: {
+		"yr":  3.16880878140289e-08,
+		"day": 1.15740740740741e-05,
+		"d":   1.15740740740741e-05,
+		"hr":  2.77777777777778e-04,
+		"mn":  1.66666666666667e-02,
+		"min": 1.66666666666667e-02,
+		"sec": 1,
+		"s":   1,
+	},
+	// conversion uses Pascal (Pa) as an intermediate unit
+	catgoryPressure: {
+		"Pa":   1,
+		"p":    1,
+		"atm":  9.86923266716013e-06,
+		"at":   9.86923266716013e-06,
+		"mmHg": 7.50063755419211e-03,
+		"psi":  1.45037737730209e-04,
+		"Torr": 7.50061682704170e-03,
+	},
+	// conversion uses Newton (N) as an intermediate unit
+	catgoryForce: {
+		"N":    1,
+		"dyn":  1.0e+5,
+		"dy":   1.0e+5,
+		"lbf":  2.24808923655339e-01,
+		"pond": 1.01971621297793e+02,
+	},
+	// conversion uses Joule (J) as an intermediate unit
+	catgoryEnergy: {
+		"J":   1,
+		"e":   9.99999519343231e+06,
+		"c":   2.39006249473467e-01,
+		"cal": 2.38846190642017e-01,
+		"eV":  6.24145700000000e+18,
+		"ev":  6.24145700000000e+18,
+		"HPh": 3.72506430801000e-07,
+		"hh":  3.72506430801000e-07,
+		"Wh":  2.77777916238711e-04,
+		"wh":  2.77777916238711e-04,
+		"flb": 2.37304222192651e+01,
+		"BTU": 9.47815067349015e-04,
+		"btu": 9.47815067349015e-04,
+	},
+	// conversion uses Horsepower (HP) as an intermediate unit
+	catgoryPower: {
+		"HP": 1,
+		"h":  1,
+		"W":  7.45699871582270e+02,
+		"w":  7.45699871582270e+02,
+		"PS": 1.01386966542400e+00,
+	},
+	// conversion uses Tesla (T) as an intermediate unit
+	catgoryMagnetism: {
+		"T":  1,
+		"ga": 10000,
+	},
+	// conversion uses litre (l) as an intermediate unit
+	catgoryVolumeAndLiquidMeasure: {
+		"l":        1,
+		"L":        1,
+		"lt":       1,
+		"tsp":      2.02884136211058e+02,
+		"tspm":     2.0e+02,
+		"tbs":      6.76280454036860e+01,
+		"oz":       3.38140227018430e+01,
+		"cup":      4.22675283773038e+00,
+		"pt":       2.11337641886519e+00,
+		"us_pt":    2.11337641886519e+00,
+		"uk_pt":    1.75975398639270e+00,
+		"qt":       1.05668820943259e+00,
+		"uk_qt":    8.79876993196351e-01,
+		"gal":      2.64172052358148e-01,
+		"uk_gal":   2.19969248299088e-01,
+		"ang3":     1.0e+27,
+		"ang^3":    1.0e+27,
+		"barrel":   6.28981077043211e-03,
+		"bushel":   2.83775932584017e-02,
+		"in3":      6.10237440947323e+01,
+		"in^3":     6.10237440947323e+01,
+		"ft3":      3.53146667214886e-02,
+		"ft^3":     3.53146667214886e-02,
+		"ly3":      1.18093498844171e-51,
+		"ly^3":     1.18093498844171e-51,
+		"m3":       1.0e-03,
+		"m^3":      1.0e-03,
+		"mi3":      2.39912758578928e-13,
+		"mi^3":     2.39912758578928e-13,
+		"yd3":      1.30795061931439e-03,
+		"yd^3":     1.30795061931439e-03,
+		"Nmi3":     1.57426214685811e-13,
+		"Nmi^3":    1.57426214685811e-13,
+		"Pica3":    2.27769904358706e+07,
+		"Pica^3":   2.27769904358706e+07,
+		"Picapt3":  2.27769904358706e+07,
+		"Picapt^3": 2.27769904358706e+07,
+		"GRT":      3.53146667214886e-04,
+		"regton":   3.53146667214886e-04,
+		"MTON":     8.82866668037215e-04,
+	},
+	// conversion uses hectare (ha) as an intermediate unit
+	catgoryArea: {
+		"ha":       1,
+		"uk_acre":  2.47105381467165e+00,
+		"us_acre":  2.47104393046628e+00,
+		"ang2":     1.0e+24,
+		"ang^2":    1.0e+24,
+		"ar":       1.0e+02,
+		"ft2":      1.07639104167097e+05,
+		"ft^2":     1.07639104167097e+05,
+		"in2":      1.55000310000620e+07,
+		"in^2":     1.55000310000620e+07,
+		"ly2":      1.11725076312873e-28,
+		"ly^2":     1.11725076312873e-28,
+		"m2":       1.0e+04,
+		"m^2":      1.0e+04,
+		"Morgen":   4.0e+00,
+		"mi2":      3.86102158542446e-03,
+		"mi^2":     3.86102158542446e-03,
+		"Nmi2":     2.91553349598123e-03,
+		"Nmi^2":    2.91553349598123e-03,
+		"Pica2":    8.03521607043214e+10,
+		"Pica^2":   8.03521607043214e+10,
+		"Picapt2":  8.03521607043214e+10,
+		"Picapt^2": 8.03521607043214e+10,
+		"yd2":      1.19599004630108e+04,
+		"yd^2":     1.19599004630108e+04,
+	},
+	// conversion uses bit (bit) as an intermediate unit
+	catgoryInformation: {
+		"bit":  1,
+		"byte": 0.125,
+	},
+	// conversion uses Meters per Second (m/s) as an intermediate unit
+	catgorySpeed: {
+		"m/s":   1,
+		"m/sec": 1,
+		"m/h":   3.60e+03,
+		"m/hr":  3.60e+03,
+		"mph":   2.23693629205440e+00,
+		"admkn": 1.94260256941567e+00,
+		"kn":    1.94384449244060e+00,
+	},
+}
+
+// conversionMultipliers maps details of the Multiplier prefixes that can be
+// used with Units of Measure in CONVERT.
+var conversionMultipliers = map[string]float64{
+	"Y":  1e24,
+	"Z":  1e21,
+	"E":  1e18,
+	"P":  1e15,
+	"T":  1e12,
+	"G":  1e9,
+	"M":  1e6,
+	"k":  1e3,
+	"h":  1e2,
+	"e":  1e1,
+	"da": 1e1,
+	"d":  1e-1,
+	"c":  1e-2,
+	"m":  1e-3,
+	"u":  1e-6,
+	"n":  1e-9,
+	"p":  1e-12,
+	"f":  1e-15,
+	"a":  1e-18,
+	"z":  1e-21,
+	"y":  1e-24,
+	"Yi": math.Pow(2, 80),
+	"Zi": math.Pow(2, 70),
+	"Ei": math.Pow(2, 60),
+	"Pi": math.Pow(2, 50),
+	"Ti": math.Pow(2, 40),
+	"Gi": math.Pow(2, 30),
+	"Mi": math.Pow(2, 20),
+	"ki": math.Pow(2, 10),
+}
+
+// getUnitDetails check and returns the unit of measure details.
+func getUnitDetails(uom string) (unit string, catgory byte, res float64, ok bool) {
+	if len(uom) == 0 {
+		ok = false
+		return
+	}
+	if unit, ok := conversionUnits[uom]; ok {
+		return uom, unit.group, 1, ok
+	}
+	// 1 character standard metric multiplier prefixes
+	multiplierType := uom[:1]
+	uom = uom[1:]
+	conversionUnit, ok1 := conversionUnits[uom]
+	multiplier, ok2 := conversionMultipliers[multiplierType]
+	if ok1 && ok2 {
+		if !conversionUnit.allowPrefix {
+			ok = false
+			return
+		}
+		unitCategory := conversionUnit.group
+		return uom, unitCategory, multiplier, true
+	}
+	// 2 character standard and binary metric multiplier prefixes
+	if len(uom) > 0 {
+		multiplierType += uom[:1]
+		uom = uom[1:]
+	}
+	conversionUnit, ok1 = conversionUnits[uom]
+	multiplier, ok2 = conversionMultipliers[multiplierType]
+	if ok1 && ok2 {
+		if !conversionUnit.allowPrefix {
+			ok = false
+			return
+		}
+		unitCategory := conversionUnit.group
+		return uom, unitCategory, multiplier, true
+	}
+	ok = false
+	return
+}
+
+// resolveTemperatureSynonyms returns unit of measure according to a given
+// temperature synonyms.
+func resolveTemperatureSynonyms(uom string) string {
+	switch uom {
+	case "fah":
+		return "F"
+	case "cel":
+		return "C"
+	case "kel":
+		return "K"
+	}
+	return uom
+}
+
+// convertTemperature returns converted temperature by a given unit of measure.
+func convertTemperature(fromUOM, toUOM string, value float64) float64 {
+	fromUOM = resolveTemperatureSynonyms(fromUOM)
+	toUOM = resolveTemperatureSynonyms(toUOM)
+	if fromUOM == toUOM {
+		return value
+	}
+	// convert to Kelvin
+	switch fromUOM {
+	case "F":
+		value = (value-32)/1.8 + 273.15
+		break
+	case "C":
+		value += 273.15
+		break
+	case "Rank":
+		value /= 1.8
+		break
+	case "Reau":
+		value = value*1.25 + 273.15
+		break
+	}
+	// convert from Kelvin
+	switch toUOM {
+	case "F":
+		value = (value-273.15)*1.8 + 32
+		break
+	case "C":
+		value -= 273.15
+		break
+	case "Rank":
+		value *= 1.8
+		break
+	case "Reau":
+		value = (value - 273.15) * 0.8
+		break
+	}
+	return value
+}
+
+// CONVERT function converts a number from one unit type (e.g. Yards) to
+// another unit type (e.g. Meters). The syntax of the function is:
+//
+//    CONVERT(number,from_unit,to_unit)
+//
+func (fn *formulaFuncs) CONVERT(argsList *list.List) formulaArg {
+	if argsList.Len() != 3 {
+		return newErrorFormulaArg(formulaErrorVALUE, "CONVERT requires 3 arguments")
+	}
+	num := argsList.Front().Value.(formulaArg).ToNumber()
+	if num.Type != ArgNumber {
+		return num
+	}
+	fromUOM, fromCategory, fromMultiplier, ok1 := getUnitDetails(argsList.Front().Next().Value.(formulaArg).Value())
+	toUOM, toCategory, toMultiplier, ok2 := getUnitDetails(argsList.Back().Value.(formulaArg).Value())
+	if !ok1 || !ok2 || fromCategory != toCategory {
+		return newErrorFormulaArg(formulaErrorNA, formulaErrorNA)
+	}
+	val := num.Number * fromMultiplier
+	if fromUOM == toUOM && fromMultiplier == toMultiplier {
+		return newNumberFormulaArg(val / fromMultiplier)
+	} else if fromUOM == toUOM {
+		return newNumberFormulaArg(val / toMultiplier)
+	} else if fromCategory == catgoryTemperature {
+		return newNumberFormulaArg(convertTemperature(fromUOM, toUOM, val))
+	}
+	fromConversion, _ := unitConversions[fromCategory][fromUOM]
+	toConversion, _ := unitConversions[fromCategory][toUOM]
+	baseValue := val * (1 / fromConversion)
+	return newNumberFormulaArg((baseValue * toConversion) / toMultiplier)
 }
 
 // DEC2BIN function converts a decimal number into a Binary (Base 2) number.
@@ -4040,37 +4591,168 @@ func det(sqMtx [][]float64) float64 {
 	return res
 }
 
+// newNumberMatrix converts a formula arguments matrix to a number matrix.
+func newNumberMatrix(arg formulaArg, phalanx bool) (numMtx [][]float64, ele formulaArg) {
+	rows := len(arg.Matrix)
+	for r, row := range arg.Matrix {
+		if phalanx && len(row) != rows {
+			ele = newErrorFormulaArg(formulaErrorVALUE, formulaErrorVALUE)
+			return
+		}
+		numMtx = append(numMtx, make([]float64, len(row)))
+		for c, cell := range row {
+			if ele = cell.ToNumber(); ele.Type != ArgNumber {
+				return
+			}
+			numMtx[r][c] = ele.Number
+		}
+	}
+	return
+}
+
+// newFormulaArgMatrix converts the number formula arguments matrix to a
+// formula arguments matrix.
+func newFormulaArgMatrix(numMtx [][]float64) (arg [][]formulaArg) {
+	for r, row := range numMtx {
+		arg = append(arg, make([]formulaArg, len(row)))
+		for c, cell := range row {
+			decimal, _ := big.NewFloat(cell).SetPrec(15).Float64()
+			arg[r][c] = newNumberFormulaArg(decimal)
+		}
+	}
+	return
+}
+
 // MDETERM calculates the determinant of a square matrix. The
 // syntax of the function is:
 //
 //    MDETERM(array)
 //
 func (fn *formulaFuncs) MDETERM(argsList *list.List) (result formulaArg) {
-	var (
-		num    float64
-		numMtx [][]float64
-		err    error
-		strMtx [][]formulaArg
-	)
 	if argsList.Len() < 1 {
-		return newErrorFormulaArg(formulaErrorVALUE, "MDETERM requires at least 1 argument")
+		return newErrorFormulaArg(formulaErrorVALUE, "MDETERM requires 1 argument")
 	}
-	strMtx = argsList.Front().Value.(formulaArg).Matrix
-	rows := len(strMtx)
-	for _, row := range argsList.Front().Value.(formulaArg).Matrix {
-		if len(row) != rows {
-			return newErrorFormulaArg(formulaErrorVALUE, formulaErrorVALUE)
-		}
-		var numRow []float64
-		for _, ele := range row {
-			if num, err = strconv.ParseFloat(ele.String, 64); err != nil {
-				return newErrorFormulaArg(formulaErrorVALUE, err.Error())
-			}
-			numRow = append(numRow, num)
-		}
-		numMtx = append(numMtx, numRow)
+	numMtx, errArg := newNumberMatrix(argsList.Front().Value.(formulaArg), true)
+	if errArg.Type == ArgError {
+		return errArg
 	}
 	return newNumberFormulaArg(det(numMtx))
+}
+
+// cofactorMatrix returns the matrix A of cofactors.
+func cofactorMatrix(i, j int, A [][]float64) float64 {
+	N, sign := len(A), -1.0
+	if (i+j)%2 == 0 {
+		sign = 1
+	}
+	var B [][]float64
+	for _, row := range A {
+		B = append(B, row)
+	}
+	for m := 0; m < N; m++ {
+		for n := j + 1; n < N; n++ {
+			B[m][n-1] = B[m][n]
+		}
+		B[m] = B[m][:len(B[m])-1]
+	}
+	for k := i + 1; k < N; k++ {
+		B[k-1] = B[k]
+	}
+	B = B[:len(B)-1]
+	return sign * det(B)
+}
+
+// adjugateMatrix returns transpose of the cofactor matrix A with Cramer's
+// rule.
+func adjugateMatrix(A [][]float64) (adjA [][]float64) {
+	N := len(A)
+	var B [][]float64
+	for i := 0; i < N; i++ {
+		adjA = append(adjA, make([]float64, N))
+		for j := 0; j < N; j++ {
+			for m := 0; m < N; m++ {
+				for n := 0; n < N; n++ {
+					for x := len(B); x <= m; x++ {
+						B = append(B, []float64{})
+					}
+					for k := len(B[m]); k <= n; k++ {
+						B[m] = append(B[m], 0)
+					}
+					B[m][n] = A[m][n]
+				}
+			}
+			adjA[i][j] = cofactorMatrix(j, i, B)
+		}
+	}
+	return
+}
+
+// MINVERSE function calculates the inverse of a square matrix. The syntax of
+// the function is:
+//
+//    MINVERSE(array)
+//
+func (fn *formulaFuncs) MINVERSE(argsList *list.List) formulaArg {
+	if argsList.Len() != 1 {
+		return newErrorFormulaArg(formulaErrorVALUE, "MINVERSE requires 1 argument")
+	}
+	numMtx, errArg := newNumberMatrix(argsList.Front().Value.(formulaArg), true)
+	if errArg.Type == ArgError {
+		return errArg
+	}
+	if detM := det(numMtx); detM != 0 {
+		datM, invertM := 1/detM, adjugateMatrix(numMtx)
+		for i := 0; i < len(invertM); i++ {
+			for j := 0; j < len(invertM[i]); j++ {
+				invertM[i][j] *= datM
+			}
+		}
+		return newMatrixFormulaArg(newFormulaArgMatrix(invertM))
+	}
+	return newErrorFormulaArg(formulaErrorNUM, formulaErrorNUM)
+}
+
+// MMULT function calculates the matrix product of two arrays
+// (representing matrices). The syntax of the function is:
+//
+//    MMULT(array1,array2)
+//
+func (fn *formulaFuncs) MMULT(argsList *list.List) formulaArg {
+	if argsList.Len() != 2 {
+		return newErrorFormulaArg(formulaErrorVALUE, "MMULT requires 2 argument")
+	}
+	numMtx1, errArg1 := newNumberMatrix(argsList.Front().Value.(formulaArg), false)
+	if errArg1.Type == ArgError {
+		return errArg1
+	}
+	numMtx2, errArg2 := newNumberMatrix(argsList.Back().Value.(formulaArg), false)
+	if errArg2.Type == ArgError {
+		return errArg2
+	}
+	array2Rows, array2Cols := len(numMtx2), len(numMtx2[0])
+	if len(numMtx1[0]) != array2Rows {
+		return newErrorFormulaArg(formulaErrorVALUE, formulaErrorVALUE)
+	}
+	var numMtx [][]float64
+	var row1, row []float64
+	var sum float64
+	for i := 0; i < len(numMtx1); i++ {
+		numMtx = append(numMtx, []float64{})
+		row = []float64{}
+		row1 = numMtx1[i]
+		for j := 0; j < array2Cols; j++ {
+			sum = 0
+			for k := 0; k < array2Rows; k++ {
+				sum += row1[k] * numMtx2[k][j]
+			}
+			for l := len(row); l <= j; l++ {
+				row = append(row, 0)
+			}
+			row[j] = sum
+			numMtx[i] = row
+		}
+	}
+	return newMatrixFormulaArg(newFormulaArgMatrix(numMtx))
 }
 
 // MOD function returns the remainder of a division between two supplied
@@ -5681,12 +6363,12 @@ func (fn *formulaFuncs) BETAdotDIST(argsList *list.List) formulaArg {
 	if a.Number == b.Number {
 		return newErrorFormulaArg(formulaErrorNUM, formulaErrorNUM)
 	}
-	fScale := b.Number - a.Number
-	x.Number = (x.Number - a.Number) / fScale
+	scale := b.Number - a.Number
+	x.Number = (x.Number - a.Number) / scale
 	if cumulative.Number == 1 {
 		return newNumberFormulaArg(getBetaDist(x.Number, alpha.Number, beta.Number))
 	}
-	return newNumberFormulaArg(getBetaDistPDF(x.Number, alpha.Number, beta.Number) / fScale)
+	return newNumberFormulaArg(getBetaDistPDF(x.Number, alpha.Number, beta.Number) / scale)
 }
 
 // BETADIST function calculates the cumulative beta probability density
@@ -6527,12 +7209,12 @@ func getLogGamma(fZ float64) float64 {
 
 // getLowRegIGamma returns lower regularized incomplete gamma function.
 func getLowRegIGamma(fA, fX float64) float64 {
-	fLnFactor := fA*math.Log(fX) - fX - getLogGamma(fA)
-	fFactor := math.Exp(fLnFactor)
+	lnFactor := fA*math.Log(fX) - fX - getLogGamma(fA)
+	factor := math.Exp(lnFactor)
 	if fX > fA+1 {
-		return 1 - fFactor*getGammaContFraction(fA, fX)
+		return 1 - factor*getGammaContFraction(fA, fX)
 	}
-	return fFactor * getGammaSeries(fA, fX)
+	return factor * getGammaSeries(fA, fX)
 }
 
 // getChiSqDistCDF returns left tail for the Chi-Square distribution.
@@ -6851,14 +7533,11 @@ func (fn *formulaFuncs) CONFIDENCEdotT(argsList *list.List) formulaArg {
 	}, size.Number/2, size.Number) / math.Sqrt(size.Number))
 }
 
-// COVAR function calculates the covariance of two supplied sets of values. The
-// syntax of the function is:
-//
-//    COVAR(array1,array2)
-//
-func (fn *formulaFuncs) COVAR(argsList *list.List) formulaArg {
+// covar is an implementation of the formula functions COVAR, COVARIANCE.P and
+// COVARIANCE.S.
+func (fn *formulaFuncs) covar(name string, argsList *list.List) formulaArg {
 	if argsList.Len() != 2 {
-		return newErrorFormulaArg(formulaErrorVALUE, "COVAR requires 2 arguments")
+		return newErrorFormulaArg(formulaErrorVALUE, fmt.Sprintf("%s requires 2 arguments", name))
 	}
 	array1 := argsList.Front().Value.(formulaArg)
 	array2 := argsList.Back().Value.(formulaArg)
@@ -6881,7 +7560,19 @@ func (fn *formulaFuncs) COVAR(argsList *list.List) formulaArg {
 		}
 		result += (arg1.Number - mean1.Number) * (arg2.Number - mean2.Number)
 	}
+	if name == "COVARIANCE.S" {
+		return newNumberFormulaArg(result / float64(n-skip-1))
+	}
 	return newNumberFormulaArg(result / float64(n-skip))
+}
+
+// COVAR function calculates the covariance of two supplied sets of values. The
+// syntax of the function is:
+//
+//    COVAR(array1,array2)
+//
+func (fn *formulaFuncs) COVAR(argsList *list.List) formulaArg {
+	return fn.covar("COVAR", argsList)
 }
 
 // COVARIANCEdotP function calculates the population covariance of two supplied
@@ -6890,10 +7581,16 @@ func (fn *formulaFuncs) COVAR(argsList *list.List) formulaArg {
 //    COVARIANCE.P(array1,array2)
 //
 func (fn *formulaFuncs) COVARIANCEdotP(argsList *list.List) formulaArg {
-	if argsList.Len() != 2 {
-		return newErrorFormulaArg(formulaErrorVALUE, "COVARIANCE.P requires 2 arguments")
-	}
-	return fn.COVAR(argsList)
+	return fn.covar("COVARIANCE.P", argsList)
+}
+
+// COVARIANCEdotS function calculates the sample covariance of two supplied
+// sets of values. The syntax of the function is:
+//
+//    COVARIANCE.S(array1,array2)
+//
+func (fn *formulaFuncs) COVARIANCEdotS(argsList *list.List) formulaArg {
+	return fn.covar("COVARIANCE.S", argsList)
 }
 
 // calcStringCountSum is part of the implementation countSum.
@@ -7455,6 +8152,703 @@ func (fn *formulaFuncs) GEOMEAN(argsList *list.List) formulaArg {
 		return newNumberFormulaArg(math.Pow(product.Number, 1/count.Number))
 	}
 	return newErrorFormulaArg(formulaErrorNUM, formulaErrorNUM)
+}
+
+// getNewMatrix create matrix by given columns and rows.
+func getNewMatrix(c, r int) (matrix [][]float64) {
+	for i := 0; i < c; i++ {
+		for j := 0; j < r; j++ {
+			for x := len(matrix); x <= i; x++ {
+				matrix = append(matrix, []float64{})
+			}
+			for y := len(matrix[i]); y <= j; y++ {
+				matrix[i] = append(matrix[i], 0)
+			}
+			matrix[i][j] = 0
+		}
+	}
+	return
+}
+
+// approxSub subtract two values, if signs are identical and the values are
+// equal, will be returns 0 instead of calculating the subtraction.
+func approxSub(a, b float64) float64 {
+	if ((a < 0 && b < 0) || (a > 0 && b > 0)) && math.Abs(a-b) < 2.22045e-016 {
+		return 0
+	}
+	return a - b
+}
+
+// matrixClone return a copy of all elements of the original matrix.
+func matrixClone(matrix [][]float64) (cloneMatrix [][]float64) {
+	for i := 0; i < len(matrix); i++ {
+		for j := 0; j < len(matrix[i]); j++ {
+			for x := len(cloneMatrix); x <= i; x++ {
+				cloneMatrix = append(cloneMatrix, []float64{})
+			}
+			for k := len(cloneMatrix[i]); k <= j; k++ {
+				cloneMatrix[i] = append(cloneMatrix[i], 0)
+			}
+			cloneMatrix[i][j] = matrix[i][j]
+		}
+	}
+	return
+}
+
+// trendGrowthMatrixInfo defined matrix checking result.
+type trendGrowthMatrixInfo struct {
+	trendType, nCX, nCY, nRX, nRY, M, N int
+	mtxX, mtxY                          [][]float64
+}
+
+// prepareTrendGrowthMtxX is a part of implementation of the trend growth prepare.
+func prepareTrendGrowthMtxX(mtxX [][]float64) [][]float64 {
+	var mtx [][]float64
+	for i := 0; i < len(mtxX); i++ {
+		for j := 0; j < len(mtxX[i]); j++ {
+			if mtxX[i][j] == 0 {
+				return nil
+			}
+			for x := len(mtx); x <= j; x++ {
+				mtx = append(mtx, []float64{})
+			}
+			for y := len(mtx[j]); y <= i; y++ {
+				mtx[j] = append(mtx[j], 0)
+			}
+			mtx[j][i] = mtxX[i][j]
+		}
+	}
+	return mtx
+}
+
+// prepareTrendGrowthMtxY is a part of implementation of the trend growth prepare.
+func prepareTrendGrowthMtxY(bLOG bool, mtxY [][]float64) [][]float64 {
+	var mtx [][]float64
+	for i := 0; i < len(mtxY); i++ {
+		for j := 0; j < len(mtxY[i]); j++ {
+			if mtxY[i][j] == 0 {
+				return nil
+			}
+			for x := len(mtx); x <= j; x++ {
+				mtx = append(mtx, []float64{})
+			}
+			for y := len(mtx[j]); y <= i; y++ {
+				mtx[j] = append(mtx[j], 0)
+			}
+			mtx[j][i] = mtxY[i][j]
+		}
+	}
+	if bLOG {
+		var pNewY [][]float64
+		for i := 0; i < len(mtxY); i++ {
+			for j := 0; j < len(mtxY[i]); j++ {
+				fVal := mtxY[i][j]
+				if fVal <= 0 {
+					return nil
+				}
+				for x := len(pNewY); x <= j; x++ {
+					pNewY = append(pNewY, []float64{})
+				}
+				for y := len(pNewY[j]); y <= i; y++ {
+					pNewY[j] = append(pNewY[j], 0)
+				}
+				pNewY[j][i] = math.Log(fVal)
+			}
+		}
+		mtx = pNewY
+	}
+	return mtx
+}
+
+// prepareTrendGrowth check and return the result.
+func prepareTrendGrowth(bLOG bool, mtxX, mtxY [][]float64) (*trendGrowthMatrixInfo, formulaArg) {
+	var nCX, nRX, M, N, trendType int
+	nRY, nCY := len(mtxY), len(mtxY[0])
+	cntY := nCY * nRY
+	newY := prepareTrendGrowthMtxY(bLOG, mtxY)
+	if newY == nil {
+		return nil, newErrorFormulaArg(formulaErrorNUM, formulaErrorNUM)
+	}
+	var newX [][]float64
+	if len(mtxX) != 0 {
+		nRX, nCX = len(mtxX), len(mtxX[0])
+		if newX = prepareTrendGrowthMtxX(mtxX); newX == nil {
+			return nil, newErrorFormulaArg(formulaErrorNUM, formulaErrorNUM)
+		}
+		if nCX == nCY && nRX == nRY {
+			trendType, M, N = 1, 1, cntY // simple regression
+		} else if nCY != 1 && nRY != 1 {
+			return nil, newErrorFormulaArg(formulaErrorREF, formulaErrorREF)
+		} else if nCY == 1 {
+			if nRX != nRY {
+				return nil, newErrorFormulaArg(formulaErrorREF, formulaErrorREF)
+			}
+			trendType, M, N = 2, nCX, nRY
+		} else if nCX != nCY {
+			return nil, newErrorFormulaArg(formulaErrorREF, formulaErrorREF)
+		} else {
+			trendType, M, N = 3, nRX, nCY
+		}
+	} else {
+		newX = getNewMatrix(nCY, nRY)
+		nCX, nRX = nCY, nRY
+		num := 1.0
+		for i := 0; i < nRY; i++ {
+			for j := 0; j < nCY; j++ {
+				newX[j][i] = num
+				num++
+			}
+		}
+		trendType, M, N = 1, 1, cntY
+	}
+	return &trendGrowthMatrixInfo{
+		trendType: trendType,
+		nCX:       nCX,
+		nCY:       nCY,
+		nRX:       nRX,
+		nRY:       nRY,
+		M:         M,
+		N:         N,
+		mtxX:      newX,
+		mtxY:      newY,
+	}, newEmptyFormulaArg()
+}
+
+// calcPosition calculate position for matrix by given index.
+func calcPosition(mtx [][]float64, idx int) (row, col int) {
+	rowSize := len(mtx[0])
+	col = idx
+	if rowSize > 1 {
+		col = idx / rowSize
+	}
+	row = idx - col*rowSize
+	return
+}
+
+// getDouble returns float64 data type value in the matrix by given index.
+func getDouble(mtx [][]float64, idx int) float64 {
+	row, col := calcPosition(mtx, idx)
+	return mtx[col][row]
+}
+
+// putDouble set a float64 data type value in the matrix by given index.
+func putDouble(mtx [][]float64, idx int, val float64) {
+	row, col := calcPosition(mtx, idx)
+	mtx[col][row] = val
+}
+
+// calcMeanOverAll returns mean of the given matrix by over all element.
+func calcMeanOverAll(mtx [][]float64, n int) float64 {
+	var sum float64
+	for i := 0; i < len(mtx); i++ {
+		for j := 0; j < len(mtx[i]); j++ {
+			sum += mtx[i][j]
+		}
+	}
+	return sum / float64(n)
+}
+
+// calcSumProduct returns uses the matrices as vectors of length M over all
+// element.
+func calcSumProduct(mtxA, mtxB [][]float64, m int) float64 {
+	sum := 0.0
+	for i := 0; i < m; i++ {
+		sum += getDouble(mtxA, i) * getDouble(mtxB, i)
+	}
+	return sum
+}
+
+// calcColumnMeans calculates means of the columns of matrix.
+func calcColumnMeans(mtxX, mtxRes [][]float64, c, r int) {
+	for i := 0; i < c; i++ {
+		var sum float64
+		for k := 0; k < r; k++ {
+			sum += mtxX[i][k]
+		}
+		putDouble(mtxRes, i, sum/float64(r))
+	}
+	return
+}
+
+// calcColumnsDelta calculates subtract of the columns of matrix.
+func calcColumnsDelta(mtx, columnMeans [][]float64, c, r int) {
+	for i := 0; i < c; i++ {
+		for k := 0; k < r; k++ {
+			mtx[i][k] = approxSub(mtx[i][k], getDouble(columnMeans, i))
+		}
+	}
+}
+
+// calcSign returns sign by given value, no mathematical signum, but used to
+// switch between adding and subtracting.
+func calcSign(val float64) float64 {
+	if val > 0 {
+		return 1
+	}
+	return -1
+}
+
+// calcColsMaximumNorm is a special version for use within QR
+// decomposition. Maximum norm of column index c starting in row index r;
+// matrix A has count n rows.
+func calcColsMaximumNorm(mtxA [][]float64, c, r, n int) float64 {
+	var norm float64
+	for row := r; row < n; row++ {
+		if norm < math.Abs(mtxA[c][row]) {
+			norm = math.Abs(mtxA[c][row])
+		}
+	}
+	return norm
+}
+
+// calcFastMult returns multiply n x m matrix A with m x l matrix B to n x l matrix R.
+func calcFastMult(mtxA, mtxB, mtxR [][]float64, n, m, l int) {
+	var sum float64
+	for row := 0; row < n; row++ {
+		for col := 0; col < l; col++ {
+			sum = 0.0
+			for k := 0; k < m; k++ {
+				sum += mtxA[k][row] * mtxB[col][k]
+			}
+			mtxR[col][row] = sum
+		}
+	}
+}
+
+// calcRowsEuclideanNorm is a special version for use within QR
+// decomposition. Euclidean norm of column index c starting in row index r;
+// matrix a has count n rows.
+func calcRowsEuclideanNorm(mtxA [][]float64, c, r, n int) float64 {
+	var norm float64
+	for row := r; row < n; row++ {
+		norm += mtxA[c][row] * mtxA[c][row]
+	}
+	return math.Sqrt(norm)
+}
+
+// calcRowsSumProduct is a special version for use within QR decomposition.
+// <A(a);B(b)> starting in row index r;
+// a and b are indices of columns, matrices A and B have count n rows.
+func calcRowsSumProduct(mtxA [][]float64, a int, mtxB [][]float64, b, r, n int) float64 {
+	var result float64
+	for row := r; row < n; row++ {
+		result += mtxA[a][row] * mtxB[b][row]
+	}
+	return result
+}
+
+// calcSolveWithUpperRightTriangle solve for X in R*X=S using back substitution.
+func calcSolveWithUpperRightTriangle(mtxA [][]float64, vecR []float64, mtxS [][]float64, k int, bIsTransposed bool) {
+	var row int
+	for rowp1 := k; rowp1 > 0; rowp1-- {
+		row = rowp1 - 1
+		sum := getDouble(mtxS, row)
+		for col := rowp1; col < k; col++ {
+			if bIsTransposed {
+				sum -= mtxA[row][col] * getDouble(mtxS, col)
+			} else {
+				sum -= mtxA[col][row] * getDouble(mtxS, col)
+			}
+		}
+		putDouble(mtxS, row, sum/vecR[row])
+	}
+}
+
+// calcRowQRDecomposition calculates a QR decomposition with Householder
+// reflection.
+func calcRowQRDecomposition(mtxA [][]float64, vecR []float64, k, n int) bool {
+	for col := 0; col < k; col++ {
+		scale := calcColsMaximumNorm(mtxA, col, col, n)
+		if scale == 0 {
+			return false
+		}
+		for row := col; row < n; row++ {
+			mtxA[col][row] = mtxA[col][row] / scale
+		}
+		euclid := calcRowsEuclideanNorm(mtxA, col, col, n)
+		factor := 1.0 / euclid / (euclid + math.Abs(mtxA[col][col]))
+		signum := calcSign(mtxA[col][col])
+		mtxA[col][col] = mtxA[col][col] + signum*euclid
+		vecR[col] = -signum * scale * euclid
+		// apply Householder transformation to A
+		for c := col + 1; c < k; c++ {
+			sum := calcRowsSumProduct(mtxA, col, mtxA, c, col, n)
+			for row := col; row < n; row++ {
+				mtxA[c][row] = mtxA[c][row] - sum*factor*mtxA[col][row]
+			}
+		}
+	}
+	return true
+}
+
+// calcApplyColsHouseholderTransformation transposed matrices A and Y.
+func calcApplyColsHouseholderTransformation(mtxA [][]float64, r int, mtxY [][]float64, n int) {
+	denominator := calcColsSumProduct(mtxA, r, mtxA, r, r, n)
+	numerator := calcColsSumProduct(mtxA, r, mtxY, 0, r, n)
+	factor := 2 * (numerator / denominator)
+	for col := r; col < n; col++ {
+		putDouble(mtxY, col, getDouble(mtxY, col)-factor*mtxA[col][r])
+	}
+}
+
+// calcRowMeans calculates means of the rows of matrix.
+func calcRowMeans(mtxX, mtxRes [][]float64, c, r int) {
+	for k := 0; k < r; k++ {
+		var fSum float64
+		for i := 0; i < c; i++ {
+			fSum += mtxX[i][k]
+		}
+		mtxRes[k][0] = fSum / float64(c)
+	}
+}
+
+// calcRowsDelta calculates subtract of the rows of matrix.
+func calcRowsDelta(mtx, rowMeans [][]float64, c, r int) {
+	for k := 0; k < r; k++ {
+		for i := 0; i < c; i++ {
+			mtx[i][k] = approxSub(mtx[i][k], rowMeans[k][0])
+		}
+	}
+}
+
+// calcColumnMaximumNorm returns maximum norm of row index R starting in col
+// index C; matrix A has count N columns.
+func calcColumnMaximumNorm(mtxA [][]float64, r, c, n int) float64 {
+	var norm float64
+	for col := c; col < n; col++ {
+		if norm < math.Abs(mtxA[col][r]) {
+			norm = math.Abs(mtxA[col][r])
+		}
+	}
+	return norm
+}
+
+// calcColsEuclideanNorm returns euclidean norm of row index R starting in
+// column index C; matrix A has count N columns.
+func calcColsEuclideanNorm(mtxA [][]float64, r, c, n int) float64 {
+	var norm float64
+	for col := c; col < n; col++ {
+		norm += (mtxA[col][r]) * (mtxA[col][r])
+	}
+	return math.Sqrt(norm)
+}
+
+// calcColsSumProduct returns sum product for given matrix.
+func calcColsSumProduct(mtxA [][]float64, a int, mtxB [][]float64, b, c, n int) float64 {
+	var result float64
+	for col := c; col < n; col++ {
+		result += mtxA[col][a] * mtxB[col][b]
+	}
+	return result
+}
+
+// calcColQRDecomposition same with transposed matrix A, N is count of
+// columns, k count of rows.
+func calcColQRDecomposition(mtxA [][]float64, vecR []float64, k, n int) bool {
+	var sum float64
+	for row := 0; row < k; row++ {
+		// calculate vector u of the householder transformation
+		scale := calcColumnMaximumNorm(mtxA, row, row, n)
+		if scale == 0 {
+			return false
+		}
+		for col := row; col < n; col++ {
+			mtxA[col][row] = mtxA[col][row] / scale
+		}
+		euclid := calcColsEuclideanNorm(mtxA, row, row, n)
+		factor := 1 / euclid / (euclid + math.Abs(mtxA[row][row]))
+		signum := calcSign(mtxA[row][row])
+		mtxA[row][row] = mtxA[row][row] + signum*euclid
+		vecR[row] = -signum * scale * euclid
+		// apply Householder transformation to A
+		for r := row + 1; r < k; r++ {
+			sum = calcColsSumProduct(mtxA, row, mtxA, r, row, n)
+			for col := row; col < n; col++ {
+				mtxA[col][r] = mtxA[col][r] - sum*factor*mtxA[col][row]
+			}
+		}
+	}
+	return true
+}
+
+// calcApplyRowsHouseholderTransformation applies a Householder transformation to a
+// column vector Y with is given as Nx1 Matrix. The vector u, from which the
+// Householder transformation is built, is the column part in matrix A, with
+// column index c, starting with row index c. A is the result of the QR
+// decomposition as obtained from calcRowQRDecomposition.
+func calcApplyRowsHouseholderTransformation(mtxA [][]float64, c int, mtxY [][]float64, n int) {
+	denominator := calcRowsSumProduct(mtxA, c, mtxA, c, c, n)
+	numerator := calcRowsSumProduct(mtxA, c, mtxY, 0, c, n)
+	factor := 2 * (numerator / denominator)
+	for row := c; row < n; row++ {
+		putDouble(mtxY, row, getDouble(mtxY, row)-factor*mtxA[c][row])
+	}
+}
+
+// calcTrendGrowthSimpleRegression calculate simple regression for the calcTrendGrowth.
+func calcTrendGrowthSimpleRegression(bConstant, bGrowth bool, mtxY, mtxX, newX, mtxRes [][]float64, meanY float64, N int) {
+	var meanX float64
+	if bConstant {
+		meanX = calcMeanOverAll(mtxX, N)
+		for i := 0; i < len(mtxX); i++ {
+			for j := 0; j < len(mtxX[i]); j++ {
+				mtxX[i][j] = approxSub(mtxX[i][j], meanX)
+			}
+		}
+	}
+	sumXY := calcSumProduct(mtxX, mtxY, N)
+	sumX2 := calcSumProduct(mtxX, mtxX, N)
+	slope := sumXY / sumX2
+	var help float64
+	var intercept float64
+	if bConstant {
+		intercept = meanY - slope*meanX
+		for i := 0; i < len(mtxRes); i++ {
+			for j := 0; j < len(mtxRes[i]); j++ {
+				help = newX[i][j]*slope + intercept
+				if bGrowth {
+					mtxRes[i][j] = math.Exp(help)
+				} else {
+					mtxRes[i][j] = help
+				}
+			}
+		}
+	} else {
+		for i := 0; i < len(mtxRes); i++ {
+			for j := 0; j < len(mtxRes[i]); j++ {
+				help = newX[i][j] * slope
+				if bGrowth {
+					mtxRes[i][j] = math.Exp(help)
+				} else {
+					mtxRes[i][j] = help
+				}
+			}
+		}
+	}
+}
+
+// calcTrendGrowthMultipleRegressionPart1 calculate multiple regression for the
+// calcTrendGrowth.
+func calcTrendGrowthMultipleRegressionPart1(bConstant, bGrowth bool, mtxY, mtxX, newX, mtxRes [][]float64, meanY float64, RXN, K, N int) {
+	vecR := make([]float64, N)   // for QR decomposition
+	means := getNewMatrix(K, 1)  // mean of each column
+	slopes := getNewMatrix(1, K) // from b1 to bK
+	if len(means) == 0 || len(slopes) == 0 {
+		return
+	}
+	if bConstant {
+		calcColumnMeans(mtxX, means, K, N)
+		calcColumnsDelta(mtxX, means, K, N)
+	}
+	if !calcRowQRDecomposition(mtxX, vecR, K, N) {
+		return
+	}
+	// Later on we will divide by elements of vecR, so make sure that they aren't zero.
+	bIsSingular := false
+	for row := 0; row < K && !bIsSingular; row++ {
+		bIsSingular = bIsSingular || vecR[row] == 0
+	}
+	if bIsSingular {
+		return
+	}
+	for col := 0; col < K; col++ {
+		calcApplyRowsHouseholderTransformation(mtxX, col, mtxY, N)
+	}
+	for col := 0; col < K; col++ {
+		putDouble(slopes, col, getDouble(mtxY, col))
+	}
+	calcSolveWithUpperRightTriangle(mtxX, vecR, slopes, K, false)
+	// Fill result matrix
+	calcFastMult(newX, slopes, mtxRes, RXN, K, 1)
+	if bConstant {
+		intercept := meanY - calcSumProduct(means, slopes, K)
+		for row := 0; row < RXN; row++ {
+			mtxRes[0][row] = mtxRes[0][row] + intercept
+		}
+	}
+	if bGrowth {
+		for i := 0; i < RXN; i++ {
+			putDouble(mtxRes, i, math.Exp(getDouble(mtxRes, i)))
+		}
+	}
+}
+
+// calcTrendGrowthMultipleRegressionPart2 calculate multiple regression for the
+// calcTrendGrowth.
+func calcTrendGrowthMultipleRegressionPart2(bConstant, bGrowth bool, mtxY, mtxX, newX, mtxRes [][]float64, meanY float64, nCXN, K, N int) {
+	vecR := make([]float64, N)   // for QR decomposition
+	means := getNewMatrix(K, 1)  // mean of each row
+	slopes := getNewMatrix(K, 1) // row from b1 to bK
+	if len(means) == 0 || len(slopes) == 0 {
+		return
+	}
+	if bConstant {
+		calcRowMeans(mtxX, means, N, K)
+		calcRowsDelta(mtxX, means, N, K)
+	}
+	if !calcColQRDecomposition(mtxX, vecR, K, N) {
+		return
+	}
+	// later on we will divide by elements of vecR, so make sure that they aren't zero
+	bIsSingular := false
+	for row := 0; row < K && !bIsSingular; row++ {
+		bIsSingular = bIsSingular || vecR[row] == 0
+	}
+	if bIsSingular {
+		return
+	}
+	for row := 0; row < K; row++ {
+		calcApplyColsHouseholderTransformation(mtxX, row, mtxY, N)
+	}
+	for col := 0; col < K; col++ {
+		putDouble(slopes, col, getDouble(mtxY, col))
+	}
+	calcSolveWithUpperRightTriangle(mtxX, vecR, slopes, K, true)
+	// fill result matrix
+	calcFastMult(slopes, newX, mtxRes, 1, K, nCXN)
+	if bConstant {
+		fIntercept := meanY - calcSumProduct(means, slopes, K)
+		for col := 0; col < nCXN; col++ {
+			mtxRes[col][0] = mtxRes[col][0] + fIntercept
+		}
+	}
+	if bGrowth {
+		for i := 0; i < nCXN; i++ {
+			putDouble(mtxRes, i, math.Exp(getDouble(mtxRes, i)))
+		}
+	}
+}
+
+// calcTrendGrowthRegression is a part of implementation of the calcTrendGrowth.
+func calcTrendGrowthRegression(bConstant, bGrowth bool, trendType, nCXN, nRXN, K, N int, mtxY, mtxX, newX, mtxRes [][]float64) {
+	if len(mtxRes) == 0 {
+		return
+	}
+	var meanY float64
+	if bConstant {
+		copyX, copyY := matrixClone(mtxX), matrixClone(mtxY)
+		mtxX, mtxY = copyX, copyY
+		meanY = calcMeanOverAll(mtxY, N)
+		for i := 0; i < len(mtxY); i++ {
+			for j := 0; j < len(mtxY[i]); j++ {
+				mtxY[i][j] = approxSub(mtxY[i][j], meanY)
+			}
+		}
+	}
+	switch trendType {
+	case 1:
+		calcTrendGrowthSimpleRegression(bConstant, bGrowth, mtxY, mtxX, newX, mtxRes, meanY, N)
+		break
+	case 2:
+		calcTrendGrowthMultipleRegressionPart1(bConstant, bGrowth, mtxY, mtxX, newX, mtxRes, meanY, nRXN, K, N)
+		break
+	default:
+		calcTrendGrowthMultipleRegressionPart2(bConstant, bGrowth, mtxY, mtxX, newX, mtxRes, meanY, nCXN, K, N)
+	}
+}
+
+// calcTrendGrowth returns values along a predicted exponential trend.
+func calcTrendGrowth(mtxY, mtxX, newX [][]float64, bConstant, bGrowth bool) ([][]float64, formulaArg) {
+	getMatrixParams, errArg := prepareTrendGrowth(bGrowth, mtxX, mtxY)
+	if errArg.Type != ArgEmpty {
+		return nil, errArg
+	}
+	trendType := getMatrixParams.trendType
+	nCX := getMatrixParams.nCX
+	nRX := getMatrixParams.nRX
+	K := getMatrixParams.M
+	N := getMatrixParams.N
+	mtxX = getMatrixParams.mtxX
+	mtxY = getMatrixParams.mtxY
+	// checking if data samples are enough
+	if (bConstant && (N < K+1)) || (!bConstant && (N < K)) || (N < 1) || (K < 1) {
+		return nil, errArg
+	}
+	// set the default newX if necessary
+	nCXN, nRXN := nCX, nRX
+	if len(newX) == 0 {
+		newX = matrixClone(mtxX) // mtxX will be changed to X-meanX
+	} else {
+		nRXN, nCXN = len(newX[0]), len(newX)
+		if (trendType == 2 && K != nCXN) || (trendType == 3 && K != nRXN) {
+			return nil, errArg
+		}
+	}
+	var mtxRes [][]float64
+	switch trendType {
+	case 1:
+		mtxRes = getNewMatrix(nCXN, nRXN)
+		break
+	case 2:
+		mtxRes = getNewMatrix(1, nRXN)
+		break
+	default:
+		mtxRes = getNewMatrix(nCXN, 1)
+	}
+	calcTrendGrowthRegression(bConstant, bGrowth, trendType, nCXN, nRXN, K, N, mtxY, mtxX, newX, mtxRes)
+	return mtxRes, errArg
+}
+
+// trendGrowth is an implementation of the formula functions GROWTH and TREND.
+func (fn *formulaFuncs) trendGrowth(name string, argsList *list.List) formulaArg {
+	if argsList.Len() < 1 {
+		return newErrorFormulaArg(formulaErrorVALUE, fmt.Sprintf("%s requires at least 1 argument", name))
+	}
+	if argsList.Len() > 4 {
+		return newErrorFormulaArg(formulaErrorVALUE, fmt.Sprintf("%s allows at most 4 arguments", name))
+	}
+	var knowY, knowX, newX [][]float64
+	var errArg formulaArg
+	constArg := newBoolFormulaArg(true)
+	knowY, errArg = newNumberMatrix(argsList.Front().Value.(formulaArg), false)
+	if errArg.Type == ArgError {
+		return errArg
+	}
+	if argsList.Len() > 1 {
+		knowX, errArg = newNumberMatrix(argsList.Front().Next().Value.(formulaArg), false)
+		if errArg.Type == ArgError {
+			return errArg
+		}
+	}
+	if argsList.Len() > 2 {
+		newX, errArg = newNumberMatrix(argsList.Front().Next().Next().Value.(formulaArg), false)
+		if errArg.Type == ArgError {
+			return errArg
+		}
+	}
+	if argsList.Len() > 3 {
+		if constArg = argsList.Back().Value.(formulaArg).ToBool(); constArg.Type != ArgNumber {
+			return constArg
+		}
+	}
+	var mtxNewX [][]float64
+	for i := 0; i < len(newX); i++ {
+		for j := 0; j < len(newX[i]); j++ {
+			for x := len(mtxNewX); x <= j; x++ {
+				mtxNewX = append(mtxNewX, []float64{})
+			}
+			for k := len(mtxNewX[j]); k <= i; k++ {
+				mtxNewX[j] = append(mtxNewX[j], 0)
+			}
+			mtxNewX[j][i] = newX[i][j]
+		}
+	}
+	mtx, errArg := calcTrendGrowth(knowY, knowX, mtxNewX, constArg.Number == 1, name == "GROWTH")
+	if errArg.Type != ArgEmpty {
+		return errArg
+	}
+	return newMatrixFormulaArg(newFormulaArgMatrix(mtx))
+}
+
+// GROWTH function calculates the exponential growth curve through a given set
+// of y-values and (optionally), one or more sets of x-values. The function
+// then extends the curve to calculate additional y-values for a further
+// supplied set of new x-values. The syntax of the function is:
+//
+//    GROWTH(known_y's,[known_x's],[new_x's],[const])
+//
+func (fn *formulaFuncs) GROWTH(argsList *list.List) formulaArg {
+	return fn.trendGrowth("GROWTH", argsList)
 }
 
 // HARMEAN function calculates the harmonic mean of a supplied set of values.
@@ -8709,6 +10103,65 @@ func (fn *formulaFuncs) min(mina bool, argsList *list.List) formulaArg {
 	return newNumberFormulaArg(min)
 }
 
+// pearsonProduct is an implementation of the formula functions PEARSON, RSQ
+// and SLOPE.
+func (fn *formulaFuncs) pearsonProduct(name string, argsList *list.List) formulaArg {
+	if argsList.Len() != 2 {
+		return newErrorFormulaArg(formulaErrorVALUE, fmt.Sprintf("%s requires 2 arguments", name))
+	}
+	var array1, array2 []formulaArg
+	if name == "SLOPE" {
+		array1 = argsList.Back().Value.(formulaArg).ToList()
+		array2 = argsList.Front().Value.(formulaArg).ToList()
+	} else {
+		array1 = argsList.Front().Value.(formulaArg).ToList()
+		array2 = argsList.Back().Value.(formulaArg).ToList()
+	}
+	if len(array1) != len(array2) {
+		return newErrorFormulaArg(formulaErrorNA, formulaErrorNA)
+	}
+	var sum, deltaX, deltaY, x, y, length float64
+	for i := 0; i < len(array1); i++ {
+		num1, num2 := array1[i].ToNumber(), array2[i].ToNumber()
+		if !(num1.Type == ArgNumber && num2.Type == ArgNumber) {
+			continue
+		}
+		x += num1.Number
+		y += num2.Number
+		length++
+	}
+	x /= length
+	y /= length
+	for i := 0; i < len(array1); i++ {
+		num1, num2 := array1[i].ToNumber(), array2[i].ToNumber()
+		if !(num1.Type == ArgNumber && num2.Type == ArgNumber) {
+			continue
+		}
+		sum += (num1.Number - x) * (num2.Number - y)
+		deltaX += (num1.Number - x) * (num1.Number - x)
+		deltaY += (num2.Number - y) * (num2.Number - y)
+	}
+	if deltaX == 0 || deltaY == 0 {
+		return newErrorFormulaArg(formulaErrorDIV, formulaErrorDIV)
+	}
+	if name == "RSQ" {
+		return newNumberFormulaArg(math.Pow(sum/math.Sqrt(deltaX*deltaY), 2))
+	}
+	if name == "PEARSON" {
+		return newNumberFormulaArg(sum / math.Sqrt(deltaX*deltaY))
+	}
+	return newNumberFormulaArg(sum / deltaX)
+}
+
+// PEARSON function calculates the Pearson Product-Moment Correlation
+// Coefficient for two sets of values. The syntax of the function is:
+//
+//    PEARSON(array1,array2)
+//
+func (fn *formulaFuncs) PEARSON(argsList *list.List) formulaArg {
+	return fn.pearsonProduct("PEARSON", argsList)
+}
+
 // PERCENTILEdotEXC function returns the k'th percentile (i.e. the value below
 // which k% of the data values fall) for a supplied range of values and a
 // supplied k (between 0 & 1 exclusive).The syntax of the function is:
@@ -9057,16 +10510,29 @@ func (fn *formulaFuncs) RANK(argsList *list.List) formulaArg {
 	return fn.rank("RANK", argsList)
 }
 
-// SKEW function calculates the skewness of the distribution of a supplied set
-// of values. The syntax of the function is:
+// RSQ function calculates the square of the Pearson Product-Moment Correlation
+// Coefficient for two supplied sets of values. The syntax of the function
+// is:
 //
-//    SKEW(number1,[number2],...)
+//    RSQ(known_y's,known_x's)
 //
-func (fn *formulaFuncs) SKEW(argsList *list.List) formulaArg {
+func (fn *formulaFuncs) RSQ(argsList *list.List) formulaArg {
+	return fn.pearsonProduct("RSQ", argsList)
+}
+
+// skew is an implementation of the formula functions SKEW and SKEW.P.
+func (fn *formulaFuncs) skew(name string, argsList *list.List) formulaArg {
 	if argsList.Len() < 1 {
-		return newErrorFormulaArg(formulaErrorVALUE, "SKEW requires at least 1 argument")
+		return newErrorFormulaArg(formulaErrorVALUE, fmt.Sprintf("%s requires at least 1 argument", name))
 	}
-	mean, stdDev, count, summer := fn.AVERAGE(argsList), fn.STDEV(argsList), 0.0, 0.0
+	mean := fn.AVERAGE(argsList)
+	var stdDev formulaArg
+	var count, summer float64
+	if name == "SKEW" {
+		stdDev = fn.STDEV(argsList)
+	} else {
+		stdDev = fn.STDEVP(argsList)
+	}
 	for arg := argsList.Front(); arg != nil; arg = arg.Next() {
 		token := arg.Value.(formulaArg)
 		switch token.Type {
@@ -9089,9 +10555,41 @@ func (fn *formulaFuncs) SKEW(argsList *list.List) formulaArg {
 		}
 	}
 	if count > 2 {
-		return newNumberFormulaArg(summer * (count / ((count - 1) * (count - 2))))
+		if name == "SKEW" {
+			return newNumberFormulaArg(summer * (count / ((count - 1) * (count - 2))))
+		}
+		return newNumberFormulaArg(summer / count)
 	}
 	return newErrorFormulaArg(formulaErrorDIV, formulaErrorDIV)
+}
+
+// SKEW function calculates the skewness of the distribution of a supplied set
+// of values. The syntax of the function is:
+//
+//    SKEW(number1,[number2],...)
+//
+func (fn *formulaFuncs) SKEW(argsList *list.List) formulaArg {
+	return fn.skew("SKEW", argsList)
+}
+
+// SKEWdotP function calculates the skewness of the distribution of a supplied
+// set of values. The syntax of the function is:
+//
+//    SKEW.P(number1,[number2],...)
+//
+func (fn *formulaFuncs) SKEWdotP(argsList *list.List) formulaArg {
+	return fn.skew("SKEW.P", argsList)
+}
+
+// SLOPE returns the slope of the linear regression line through data points in
+// known_y's and known_x's. The slope is the vertical distance divided by the
+// horizontal distance between any two points on the line, which is the rate
+// of change along the regression line. The syntax of the function is:
+//
+//    SLOPE(known_y's,known_x's)
+//
+func (fn *formulaFuncs) SLOPE(argsList *list.List) formulaArg {
+	return fn.pearsonProduct("SLOPE", argsList)
 }
 
 // SMALL function returns the k'th smallest value from an array of numeric
@@ -9131,12 +10629,17 @@ func (fn *formulaFuncs) STANDARDIZE(argsList *list.List) formulaArg {
 	return newNumberFormulaArg((x.Number - mean.Number) / stdDev.Number)
 }
 
-// stdevp is an implementation of the formula functions STDEVP and STDEV.P.
+// stdevp is an implementation of the formula functions STDEVP, STDEV.P and
+// STDEVPA.
 func (fn *formulaFuncs) stdevp(name string, argsList *list.List) formulaArg {
 	if argsList.Len() < 1 {
 		return newErrorFormulaArg(formulaErrorVALUE, fmt.Sprintf("%s requires at least 1 argument", name))
 	}
-	varp := fn.VARP(argsList)
+	fnName := "VARP"
+	if name == "STDEVPA" {
+		fnName = "VARPA"
+	}
+	varp := fn.vars(fnName, argsList)
 	if varp.Type != ArgNumber {
 		return varp
 	}
@@ -9159,6 +10662,15 @@ func (fn *formulaFuncs) STDEVP(argsList *list.List) formulaArg {
 //
 func (fn *formulaFuncs) STDEVdotP(argsList *list.List) formulaArg {
 	return fn.stdevp("STDEV.P", argsList)
+}
+
+// STDEVPA function calculates the standard deviation of a supplied set of
+// values. The syntax of the function is:
+//
+//    STDEVPA(number1,[number2],...)
+//
+func (fn *formulaFuncs) STDEVPA(argsList *list.List) formulaArg {
+	return fn.stdevp("STDEVPA", argsList)
 }
 
 // getTDist is an implementation for the beta distribution probability density
@@ -9381,92 +10893,98 @@ func (fn *formulaFuncs) TINV(argsList *list.List) formulaArg {
 	return fn.TdotINVdot2T(argsList)
 }
 
+// TREND function calculates the linear trend line through a given set of
+// y-values and (optionally), a given set of x-values. The function then
+// extends the linear trendline to calculate additional y-values for a further
+// supplied set of new x-values. The syntax of the function is:
+//
+//    TREND(known_y's,[known_x's],[new_x's],[const])
+//
+func (fn *formulaFuncs) TREND(argsList *list.List) formulaArg {
+	return fn.trendGrowth("TREND", argsList)
+}
+
 // tTest calculates the probability associated with the Student's T Test.
-func tTest(bTemplin bool, pMat1, pMat2 [][]formulaArg, nC1, nC2, nR1, nR2 int, fT, fF float64) (float64, float64, bool) {
-	var fCount1, fCount2, fSum1, fSumSqr1, fSum2, fSumSqr2 float64
+func tTest(bTemplin bool, mtx1, mtx2 [][]formulaArg, c1, c2, r1, r2 int, fT, fF float64) (float64, float64, bool) {
+	var cnt1, cnt2, sum1, sumSqr1, sum2, sumSqr2 float64
 	var fVal formulaArg
-	for i := 0; i < nC1; i++ {
-		for j := 0; j < nR1; j++ {
-			fVal = pMat1[i][j].ToNumber()
+	for i := 0; i < c1; i++ {
+		for j := 0; j < r1; j++ {
+			fVal = mtx1[i][j].ToNumber()
 			if fVal.Type == ArgNumber {
-				fSum1 += fVal.Number
-				fSumSqr1 += fVal.Number * fVal.Number
-				fCount1++
+				sum1 += fVal.Number
+				sumSqr1 += fVal.Number * fVal.Number
+				cnt1++
 			}
 		}
 	}
-	for i := 0; i < nC2; i++ {
-		for j := 0; j < nR2; j++ {
-			fVal = pMat2[i][j].ToNumber()
+	for i := 0; i < c2; i++ {
+		for j := 0; j < r2; j++ {
+			fVal = mtx2[i][j].ToNumber()
 			if fVal.Type == ArgNumber {
-				fSum2 += fVal.Number
-				fSumSqr2 += fVal.Number * fVal.Number
-				fCount2++
+				sum2 += fVal.Number
+				sumSqr2 += fVal.Number * fVal.Number
+				cnt2++
 			}
 		}
 	}
-	if fCount1 < 2.0 || fCount2 < 2.0 {
+	if cnt1 < 2.0 || cnt2 < 2.0 {
 		return 0, 0, false
 	}
 	if bTemplin {
-		fS1 := (fSumSqr1 - fSum1*fSum1/fCount1) / (fCount1 - 1) / fCount1
-		fS2 := (fSumSqr2 - fSum2*fSum2/fCount2) / (fCount2 - 1) / fCount2
+		fS1 := (sumSqr1 - sum1*sum1/cnt1) / (cnt1 - 1) / cnt1
+		fS2 := (sumSqr2 - sum2*sum2/cnt2) / (cnt2 - 1) / cnt2
 		if fS1+fS2 == 0 {
 			return 0, 0, false
 		}
 		c := fS1 / (fS1 + fS2)
-		fT = math.Abs(fSum1/fCount1-fSum2/fCount2) / math.Sqrt(fS1+fS2)
-		fF = 1 / (c*c/(fCount1-1) + (1-c)*(1-c)/(fCount2-1))
+		fT = math.Abs(sum1/cnt1-sum2/cnt2) / math.Sqrt(fS1+fS2)
+		fF = 1 / (c*c/(cnt1-1) + (1-c)*(1-c)/(cnt2-1))
 		return fT, fF, true
 	}
-	fS1 := (fSumSqr1 - fSum1*fSum1/fCount1) / (fCount1 - 1)
-	fS2 := (fSumSqr2 - fSum2*fSum2/fCount2) / (fCount2 - 1)
-	fT = math.Abs(fSum1/fCount1-fSum2/fCount2) / math.Sqrt((fCount1-1)*fS1+(fCount2-1)*fS2) * math.Sqrt(fCount1*fCount2*(fCount1+fCount2-2)/(fCount1+fCount2))
-	fF = fCount1 + fCount2 - 2
+	fS1 := (sumSqr1 - sum1*sum1/cnt1) / (cnt1 - 1)
+	fS2 := (sumSqr2 - sum2*sum2/cnt2) / (cnt2 - 1)
+	fT = math.Abs(sum1/cnt1-sum2/cnt2) / math.Sqrt((cnt1-1)*fS1+(cnt2-1)*fS2) * math.Sqrt(cnt1*cnt2*(cnt1+cnt2-2)/(cnt1+cnt2))
+	fF = cnt1 + cnt2 - 2
 	return fT, fF, true
 }
 
 // tTest is an implementation of the formula function TTEST.
-func (fn *formulaFuncs) tTest(pMat1, pMat2 [][]formulaArg, fTails, fTyp float64) formulaArg {
+func (fn *formulaFuncs) tTest(mtx1, mtx2 [][]formulaArg, fTails, fTyp float64) formulaArg {
 	var fT, fF float64
-	nC1 := len(pMat1)
-	nC2 := len(pMat2)
-	nR1 := len(pMat1[0])
-	nR2 := len(pMat2[0])
-	ok := true
+	c1, c2, r1, r2, ok := len(mtx1), len(mtx2), len(mtx1[0]), len(mtx2[0]), true
 	if fTyp == 1 {
-		if nC1 != nC2 || nR1 != nR2 {
+		if c1 != c2 || r1 != r2 {
 			return newErrorFormulaArg(formulaErrorNA, formulaErrorNA)
 		}
-		var fCount, fSum1, fSum2, fSumSqrD float64
+		var cnt, sum1, sum2, sumSqrD float64
 		var fVal1, fVal2 formulaArg
-		for i := 0; i < nC1; i++ {
-			for j := 0; j < nR1; j++ {
-				fVal1 = pMat1[i][j].ToNumber()
-				fVal2 = pMat2[i][j].ToNumber()
+		for i := 0; i < c1; i++ {
+			for j := 0; j < r1; j++ {
+				fVal1, fVal2 = mtx1[i][j].ToNumber(), mtx2[i][j].ToNumber()
 				if fVal1.Type != ArgNumber || fVal2.Type != ArgNumber {
 					continue
 				}
-				fSum1 += fVal1.Number
-				fSum2 += fVal2.Number
-				fSumSqrD += (fVal1.Number - fVal2.Number) * (fVal1.Number - fVal2.Number)
-				fCount++
+				sum1 += fVal1.Number
+				sum2 += fVal2.Number
+				sumSqrD += (fVal1.Number - fVal2.Number) * (fVal1.Number - fVal2.Number)
+				cnt++
 			}
 		}
-		if fCount < 1 {
+		if cnt < 1 {
 			return newErrorFormulaArg(formulaErrorNUM, formulaErrorNUM)
 		}
-		fSumD := fSum1 - fSum2
-		fDivider := fCount*fSumSqrD - fSumD*fSumD
-		if fDivider == 0 {
+		sumD := sum1 - sum2
+		divider := cnt*sumSqrD - sumD*sumD
+		if divider == 0 {
 			return newErrorFormulaArg(formulaErrorDIV, formulaErrorDIV)
 		}
-		fT = math.Abs(fSumD) * math.Sqrt((fCount-1)/fDivider)
-		fF = fCount - 1
+		fT = math.Abs(sumD) * math.Sqrt((cnt-1)/divider)
+		fF = cnt - 1
 	} else if fTyp == 2 {
-		fT, fF, ok = tTest(false, pMat1, pMat2, nC1, nC2, nR1, nR2, fT, fF)
+		fT, fF, ok = tTest(false, mtx1, mtx2, c1, c2, r1, r2, fT, fF)
 	} else {
-		fT, fF, ok = tTest(true, pMat1, pMat2, nC1, nC2, nR1, nR2, fT, fF)
+		fT, fF, ok = tTest(true, mtx1, mtx2, c1, c2, r1, r2, fT, fF)
 	}
 	if !ok {
 		return newErrorFormulaArg(formulaErrorNUM, formulaErrorNUM)
@@ -9576,6 +11094,9 @@ func (fn *formulaFuncs) vars(name string, argsList *list.List) formulaArg {
 	}
 	for arg := argsList.Front(); arg != nil; arg = arg.Next() {
 		for _, token := range arg.Value.(formulaArg).ToList() {
+			if token.Value() == "" {
+				continue
+			}
 			num := token.ToNumber()
 			if token.Value() != "TRUE" && num.Type == ArgNumber {
 				summerA += num.Number * num.Number
