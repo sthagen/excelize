@@ -1788,6 +1788,9 @@ func TestCalcCellValue(t *testing.T) {
 		"=HLOOKUP(F3,F3:F8,3,FALSE)":          "34440",
 		"=HLOOKUP(INT(F3),F3:F8,3,FALSE)":     "34440",
 		"=HLOOKUP(MUNIT(1),MUNIT(1),1,FALSE)": "1",
+		// HYPERLINK
+		"=HYPERLINK(\"https://github.com/xuri/excelize\")":              "https://github.com/xuri/excelize",
+		"=HYPERLINK(\"https://github.com/xuri/excelize\",\"Excelize\")": "Excelize",
 		// VLOOKUP
 		"=VLOOKUP(D2,D:D,1,FALSE)":            "Jan",
 		"=VLOOKUP(D2,D1:D10,1)":               "Jan",
@@ -1922,6 +1925,13 @@ func TestCalcCellValue(t *testing.T) {
 		// EFFECT
 		"=EFFECT(0.1,4)":   "0.103812890625",
 		"=EFFECT(0.025,2)": "0.02515625",
+		// EUROCONVERT
+		"=EUROCONVERT(1.47,\"EUR\",\"EUR\")":         "1.47",
+		"=EUROCONVERT(1.47,\"EUR\",\"DEM\")":         "2.88",
+		"=EUROCONVERT(1.47,\"FRF\",\"DEM\")":         "0.44",
+		"=EUROCONVERT(1.47,\"FRF\",\"DEM\",FALSE)":   "0.44",
+		"=EUROCONVERT(1.47,\"FRF\",\"DEM\",FALSE,3)": "0.44",
+		"=EUROCONVERT(1.47,\"FRF\",\"DEM\",TRUE,3)":  "0.43810592",
 		// FV
 		"=FV(0.05/12,60,-1000)":   "68006.0828408434",
 		"=FV(0.1/4,16,-2000,0,1)": "39729.4608941662",
@@ -3718,6 +3728,9 @@ func TestCalcCellValue(t *testing.T) {
 		"=MATCH(0,A1:B1)":       "MATCH arguments lookup_array should be one-dimensional array",
 		// TRANSPOSE
 		"=TRANSPOSE()": "TRANSPOSE requires 1 argument",
+		// HYPERLINK
+		"=HYPERLINK()": "HYPERLINK requires at least 1 argument",
+		"=HYPERLINK(\"https://github.com/xuri/excelize\",\"Excelize\",\"\")": "HYPERLINK allows at most 2 arguments",
 		// VLOOKUP
 		"=VLOOKUP()":                     "VLOOKUP requires at least 3 arguments",
 		"=VLOOKUP(D2,D1,1,FALSE)":        "VLOOKUP requires second argument of table array",
@@ -3958,6 +3971,14 @@ func TestCalcCellValue(t *testing.T) {
 		"=EFFECT(0,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
 		"=EFFECT(0,0)":    "#NUM!",
 		"=EFFECT(1,0)":    "#NUM!",
+		// EUROCONVERT
+		"=EUROCONVERT()": "EUROCONVERT requires at least 3 arguments",
+		"=EUROCONVERT(1.47,\"FRF\",\"DEM\",TRUE,3,1)":  "EUROCONVERT allows at most 5 arguments",
+		"=EUROCONVERT(\"\",\"FRF\",\"DEM\",TRUE,3)":    "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=EUROCONVERT(1.47,\"FRF\",\"DEM\",\"\",3)":    "strconv.ParseBool: parsing \"\": invalid syntax",
+		"=EUROCONVERT(1.47,\"FRF\",\"DEM\",TRUE,\"\")": "strconv.ParseFloat: parsing \"\": invalid syntax",
+		"=EUROCONVERT(1.47,\"\",\"DEM\")":              "#VALUE!",
+		"=EUROCONVERT(1.47,\"FRF\",\"\",TRUE,3)":       "#VALUE!",
 		// FV
 		"=FV()":              "FV requires at least 3 arguments",
 		"=FV(0,0,0,0,0,0,0)": "FV allows at most 5 arguments",
