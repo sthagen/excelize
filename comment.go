@@ -92,8 +92,7 @@ func (f *File) getSheetComments(sheetFile string) string {
 // author length is 255 and the max text length is 32512. For example, add a
 // comment in Sheet1!$A$30:
 //
-//    err := f.AddComment("Sheet1", "A30", `{"author":"Excelize: ","text":"This is a comment."}`)
-//
+//	err := f.AddComment("Sheet1", "A30", `{"author":"Excelize: ","text":"This is a comment."}`)
 func (f *File) AddComment(sheet, cell, format string) error {
 	formatSet, err := parseFormatCommentsSet(format)
 	if err != nil {
@@ -178,6 +177,21 @@ func (f *File) addDrawingVML(commentID int, drawingVML, cell string, lineCount, 
 				},
 			},
 		}
+		// load exist comment shapes from xl/drawings/vmlDrawing%d.vml (only once)
+		d := f.decodeVMLDrawingReader(drawingVML)
+		if d != nil {
+			for _, v := range d.Shape {
+				s := xlsxShape{
+					ID:          "_x0000_s1025",
+					Type:        "#_x0000_t202",
+					Style:       "position:absolute;73.5pt;width:108pt;height:59.25pt;z-index:1;visibility:hidden",
+					Fillcolor:   "#fbf6d6",
+					Strokecolor: "#edeaa1",
+					Val:         v.Val,
+				}
+				vml.Shape = append(vml.Shape, s)
+			}
+		}
 	}
 	sp := encodeShape{
 		Fill: &vFill{
@@ -221,20 +235,6 @@ func (f *File) addDrawingVML(commentID int, drawingVML, cell string, lineCount, 
 		Fillcolor:   "#fbf6d6",
 		Strokecolor: "#edeaa1",
 		Val:         string(s[13 : len(s)-14]),
-	}
-	d := f.decodeVMLDrawingReader(drawingVML)
-	if d != nil {
-		for _, v := range d.Shape {
-			s := xlsxShape{
-				ID:          "_x0000_s1025",
-				Type:        "#_x0000_t202",
-				Style:       "position:absolute;73.5pt;width:108pt;height:59.25pt;z-index:1;visibility:hidden",
-				Fillcolor:   "#fbf6d6",
-				Strokecolor: "#edeaa1",
-				Val:         v.Val,
-			}
-			vml.Shape = append(vml.Shape, s)
-		}
 	}
 	vml.Shape = append(vml.Shape, shape)
 	f.VMLDrawing[drawingVML] = vml
