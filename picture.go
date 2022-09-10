@@ -39,7 +39,7 @@ func parseFormatPictureSet(formatSet string) (*formatPicture, error) {
 
 // AddPicture provides the method to add picture in a sheet by given picture
 // format set (such as offset, scale, aspect ratio setting and print settings)
-// and file path. For example:
+// and file path. This function is concurrency safe. For example:
 //
 //	package main
 //
@@ -469,7 +469,7 @@ func (f *File) getSheetRelationshipsTargetByID(sheet, rID string) string {
 // GetPicture provides a function to get picture base name and raw content
 // embed in spreadsheet by given worksheet and cell name. This function
 // returns the file name in spreadsheet and file contents as []byte data
-// types. For example:
+// types. This function is concurrency safe. For example:
 //
 //	f, err := excelize.OpenFile("Book1.xlsx")
 //	if err != nil {
@@ -505,9 +505,6 @@ func (f *File) GetPicture(sheet, cell string) (string, []byte, error) {
 	}
 	target := f.getSheetRelationshipsTargetByID(sheet, ws.Drawing.RID)
 	drawingXML := strings.ReplaceAll(target, "..", "xl")
-	if _, ok := f.Pkg.Load(drawingXML); !ok {
-		return "", nil, err
-	}
 	drawingRelationships := strings.ReplaceAll(
 		strings.ReplaceAll(target, "../drawings", "xl/drawings/_rels"), ".xml", ".xml.rels")
 

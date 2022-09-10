@@ -238,7 +238,8 @@ func (rows *Rows) rowXMLHandler(rowIterator *rowXMLIterator, xmlElement *xml.Sta
 }
 
 // Rows returns a rows iterator, used for streaming reading data for a
-// worksheet with a large data. For example:
+// worksheet with a large data. This function is concurrency safe. For
+// example:
 //
 //	rows, err := f.Rows("Sheet1")
 //	if err != nil {
@@ -622,21 +623,27 @@ func (f *File) RemoveRow(sheet string, row int) error {
 	return f.adjustHelper(sheet, rows, row, -1)
 }
 
-// InsertRow provides a function to insert a new row after given Excel row
-// number starting from 1. For example, create a new row before row 3 in
-// Sheet1:
+// InsertRows provides a function to insert new rows after the given Excel row
+// number starting from 1 and number of rows. For example, create two rows
+// before row 3 in Sheet1:
 //
-//	err := f.InsertRow("Sheet1", 3)
+//	err := f.InsertRows("Sheet1", 3, 2)
 //
 // Use this method with caution, which will affect changes in references such
 // as formulas, charts, and so on. If there is any referenced value of the
 // worksheet, it will cause a file error when you open it. The excelize only
 // partially updates these references currently.
-func (f *File) InsertRow(sheet string, row int) error {
+func (f *File) InsertRows(sheet string, row, n int) error {
 	if row < 1 {
 		return newInvalidRowNumberError(row)
 	}
-	return f.adjustHelper(sheet, rows, row, 1)
+	if row >= TotalRows || n >= TotalRows {
+		return ErrMaxRows
+	}
+	if n < 1 {
+		return ErrParameterInvalid
+	}
+	return f.adjustHelper(sheet, rows, row, n)
 }
 
 // DuplicateRow inserts a copy of specified row (by its Excel row number) below
@@ -851,7 +858,10 @@ func (f *File) SetRowStyle(sheet string, start, end, styleID int) error {
 	if end > TotalRows {
 		return ErrMaxRows
 	}
-	if styleID < 0 {
+	s := f.stylesReader()
+	s.Lock()
+	defer s.Unlock()
+	if styleID < 0 || s.CellXfs == nil || len(s.CellXfs.Xf) <= styleID {
 		return newInvalidStyleID(styleID)
 	}
 	ws, err := f.workSheetReader(sheet)
