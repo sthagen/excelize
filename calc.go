@@ -789,10 +789,14 @@ func (f *File) calcCellValue(ctx *calcContext, sheet, cell string) (result strin
 		return
 	}
 	result = token.Value()
-	isNum, precision := isNumeric(result)
-	if isNum && (precision > 15 || precision == 0) {
-		num := roundPrecision(result, -1)
-		result = strings.ToUpper(num)
+	if isNum, precision, decimal := isNumeric(result); isNum {
+		if precision > 15 {
+			result = strings.ToUpper(strconv.FormatFloat(decimal, 'G', 15, 64))
+			return
+		}
+		if !strings.HasPrefix(result, "0") {
+			result = strings.ToUpper(strconv.FormatFloat(decimal, 'f', -1, 64))
+		}
 	}
 	return
 }
@@ -1408,7 +1412,7 @@ func (f *File) parseReference(ctx *calcContext, sheet, reference string) (arg fo
 		cr := cellRef{}
 		if len(tokens) == 2 { // have a worksheet name
 			cr.Sheet = tokens[0]
-			// cast to cell coordinates
+			// cast to cell reference
 			if cr.Col, cr.Row, err = CellNameToCoordinates(tokens[1]); err != nil {
 				// cast to column
 				if cr.Col, err = ColumnNameToNumber(tokens[1]); err != nil {
@@ -1428,7 +1432,7 @@ func (f *File) parseReference(ctx *calcContext, sheet, reference string) (arg fo
 			refs.PushBack(cr)
 			continue
 		}
-		// cast to cell coordinates
+		// cast to cell reference
 		if cr.Col, cr.Row, err = CellNameToCoordinates(tokens[0]); err != nil {
 			// cast to column
 			if cr.Col, err = ColumnNameToNumber(tokens[0]); err != nil {
@@ -2089,13 +2093,13 @@ func (fn *formulaFuncs) COMPLEX(argsList *list.List) formulaArg {
 // cmplx2str replace complex number string characters.
 func cmplx2str(num complex128, suffix string) string {
 	realPart, imagPart := fmt.Sprint(real(num)), fmt.Sprint(imag(num))
-	isNum, i := isNumeric(realPart)
+	isNum, i, decimal := isNumeric(realPart)
 	if isNum && i > 15 {
-		realPart = roundPrecision(realPart, -1)
+		realPart = strconv.FormatFloat(decimal, 'G', 15, 64)
 	}
-	isNum, i = isNumeric(imagPart)
+	isNum, i, decimal = isNumeric(imagPart)
 	if isNum && i > 15 {
-		imagPart = roundPrecision(imagPart, -1)
+		imagPart = strconv.FormatFloat(decimal, 'G', 15, 64)
 	}
 	c := realPart
 	if imag(num) > 0 {

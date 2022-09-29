@@ -20,16 +20,16 @@ import (
 	"strings"
 )
 
-// parseFormatTableSet provides a function to parse the format settings of the
+// parseTableOptions provides a function to parse the format settings of the
 // table with default value.
-func parseFormatTableSet(formatSet string) (*formatTable, error) {
-	format := formatTable{ShowRowStripes: true}
-	err := json.Unmarshal(parseFormatSet(formatSet), &format)
-	return &format, err
+func parseTableOptions(opts string) (*tableOptions, error) {
+	options := tableOptions{ShowRowStripes: true}
+	err := json.Unmarshal(fallbackOptions(opts), &options)
+	return &options, err
 }
 
 // AddTable provides the method to add table in a worksheet by given worksheet
-// name, coordinate area and format set. For example, create a table of A1:D5
+// name, range reference and format set. For example, create a table of A1:D5
 // on Sheet1:
 //
 //	err := f.AddTable("Sheet1", "A1", "D5", "")
@@ -48,7 +48,7 @@ func parseFormatTableSet(formatSet string) (*formatTable, error) {
 // Note that the table must be at least two lines including the header. The
 // header cells must contain strings and must be unique, and must set the
 // header row data of the table before calling the AddTable function. Multiple
-// tables coordinate areas that can't have an intersection.
+// tables range reference that can't have an intersection.
 //
 // table_name: The name of the table, in the same worksheet name of the table should be unique
 //
@@ -57,8 +57,8 @@ func parseFormatTableSet(formatSet string) (*formatTable, error) {
 //	TableStyleLight1 - TableStyleLight21
 //	TableStyleMedium1 - TableStyleMedium28
 //	TableStyleDark1 - TableStyleDark11
-func (f *File) AddTable(sheet, hCell, vCell, format string) error {
-	formatSet, err := parseFormatTableSet(format)
+func (f *File) AddTable(sheet, hCell, vCell, opts string) error {
+	options, err := parseTableOptions(opts)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func (f *File) AddTable(sheet, hCell, vCell, format string) error {
 		return err
 	}
 	f.addSheetNameSpace(sheet, SourceRelationship)
-	if err = f.addTable(sheet, tableXML, hCol, hRow, vCol, vRow, tableID, formatSet); err != nil {
+	if err = f.addTable(sheet, tableXML, hCol, hRow, vCol, vRow, tableID, options); err != nil {
 		return err
 	}
 	f.addContentTypePart(tableID, "table")
@@ -159,20 +159,20 @@ func (f *File) setTableHeader(sheet string, x1, y1, x2 int) ([]*xlsxTableColumn,
 }
 
 // addTable provides a function to add table by given worksheet name,
-// coordinate area and format set.
-func (f *File) addTable(sheet, tableXML string, x1, y1, x2, y2, i int, formatSet *formatTable) error {
+// range reference and format set.
+func (f *File) addTable(sheet, tableXML string, x1, y1, x2, y2, i int, opts *tableOptions) error {
 	// Correct the minimum number of rows, the table at least two lines.
 	if y1 == y2 {
 		y2++
 	}
 
-	// Correct table reference coordinate area, such correct C1:B3 to B1:C3.
-	ref, err := f.coordinatesToAreaRef([]int{x1, y1, x2, y2})
+	// Correct table range reference, such correct C1:B3 to B1:C3.
+	ref, err := f.coordinatesToRangeRef([]int{x1, y1, x2, y2})
 	if err != nil {
 		return err
 	}
 	tableColumns, _ := f.setTableHeader(sheet, x1, y1, x2)
-	name := formatSet.TableName
+	name := opts.TableName
 	if name == "" {
 		name = "Table" + strconv.Itoa(i)
 	}
@@ -190,11 +190,11 @@ func (f *File) addTable(sheet, tableXML string, x1, y1, x2, y2, i int, formatSet
 			TableColumn: tableColumns,
 		},
 		TableStyleInfo: &xlsxTableStyleInfo{
-			Name:              formatSet.TableStyle,
-			ShowFirstColumn:   formatSet.ShowFirstColumn,
-			ShowLastColumn:    formatSet.ShowLastColumn,
-			ShowRowStripes:    formatSet.ShowRowStripes,
-			ShowColumnStripes: formatSet.ShowColumnStripes,
+			Name:              opts.TableStyle,
+			ShowFirstColumn:   opts.ShowFirstColumn,
+			ShowLastColumn:    opts.ShowLastColumn,
+			ShowRowStripes:    opts.ShowRowStripes,
+			ShowColumnStripes: opts.ShowColumnStripes,
 		},
 	}
 	table, _ := xml.Marshal(t)
@@ -202,26 +202,26 @@ func (f *File) addTable(sheet, tableXML string, x1, y1, x2, y2, i int, formatSet
 	return nil
 }
 
-// parseAutoFilterSet provides a function to parse the settings of the auto
+// parseAutoFilterOptions provides a function to parse the settings of the auto
 // filter.
-func parseAutoFilterSet(formatSet string) (*formatAutoFilter, error) {
-	format := formatAutoFilter{}
-	err := json.Unmarshal([]byte(formatSet), &format)
-	return &format, err
+func parseAutoFilterOptions(opts string) (*autoFilterOptions, error) {
+	options := autoFilterOptions{}
+	err := json.Unmarshal([]byte(opts), &options)
+	return &options, err
 }
 
 // AutoFilter provides the method to add auto filter in a worksheet by given
-// worksheet name, coordinate area and settings. An autofilter in Excel is a
+// worksheet name, range reference and settings. An auto filter in Excel is a
 // way of filtering a 2D range of data based on some simple criteria. For
-// example applying an autofilter to a cell range A1:D4 in the Sheet1:
+// example applying an auto filter to a cell range A1:D4 in the Sheet1:
 //
 //	err := f.AutoFilter("Sheet1", "A1", "D4", "")
 //
-// Filter data in an autofilter:
+// Filter data in an auto filter:
 //
 //	err := f.AutoFilter("Sheet1", "A1", "D4", `{"column":"B","expression":"x != blanks"}`)
 //
-// column defines the filter columns in a autofilter range based on simple
+// column defines the filter columns in a auto filter range based on simple
 // criteria
 //
 // It isn't sufficient to just specify the filter condition. You must also
@@ -279,7 +279,7 @@ func parseAutoFilterSet(formatSet string) (*formatAutoFilter, error) {
 //	x     < 2000
 //	col   < 2000
 //	Price < 2000
-func (f *File) AutoFilter(sheet, hCell, vCell, format string) error {
+func (f *File) AutoFilter(sheet, hCell, vCell, opts string) error {
 	hCol, hRow, err := CellNameToCoordinates(hCell)
 	if err != nil {
 		return err
@@ -297,7 +297,7 @@ func (f *File) AutoFilter(sheet, hCell, vCell, format string) error {
 		vRow, hRow = hRow, vRow
 	}
 
-	formatSet, _ := parseAutoFilterSet(format)
+	options, _ := parseAutoFilterOptions(opts)
 	cellStart, _ := CoordinatesToCellName(hCol, hRow, true)
 	cellEnd, _ := CoordinatesToCellName(vCol, vRow, true)
 	ref, filterDB := cellStart+":"+cellEnd, "_xlnm._FilterDatabase"
@@ -328,12 +328,12 @@ func (f *File) AutoFilter(sheet, hCell, vCell, format string) error {
 		}
 	}
 	refRange := vCol - hCol
-	return f.autoFilter(sheet, ref, refRange, hCol, formatSet)
+	return f.autoFilter(sheet, ref, refRange, hCol, options)
 }
 
 // autoFilter provides a function to extract the tokens from the filter
 // expression. The tokens are mainly non-whitespace groups.
-func (f *File) autoFilter(sheet, ref string, refRange, col int, formatSet *formatAutoFilter) error {
+func (f *File) autoFilter(sheet, ref string, refRange, col int, opts *autoFilterOptions) error {
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {
 		return err
@@ -346,28 +346,28 @@ func (f *File) autoFilter(sheet, ref string, refRange, col int, formatSet *forma
 		Ref: ref,
 	}
 	ws.AutoFilter = filter
-	if formatSet.Column == "" || formatSet.Expression == "" {
+	if opts.Column == "" || opts.Expression == "" {
 		return nil
 	}
 
-	fsCol, err := ColumnNameToNumber(formatSet.Column)
+	fsCol, err := ColumnNameToNumber(opts.Column)
 	if err != nil {
 		return err
 	}
 	offset := fsCol - col
 	if offset < 0 || offset > refRange {
-		return fmt.Errorf("incorrect index of column '%s'", formatSet.Column)
+		return fmt.Errorf("incorrect index of column '%s'", opts.Column)
 	}
 
 	filter.FilterColumn = append(filter.FilterColumn, &xlsxFilterColumn{
 		ColID: offset,
 	})
 	re := regexp.MustCompile(`"(?:[^"]|"")*"|\S+`)
-	token := re.FindAllString(formatSet.Expression, -1)
+	token := re.FindAllString(opts.Expression, -1)
 	if len(token) != 3 && len(token) != 7 {
-		return fmt.Errorf("incorrect number of tokens in criteria '%s'", formatSet.Expression)
+		return fmt.Errorf("incorrect number of tokens in criteria '%s'", opts.Expression)
 	}
-	expressions, tokens, err := f.parseFilterExpression(formatSet.Expression, token)
+	expressions, tokens, err := f.parseFilterExpression(opts.Expression, token)
 	if err != nil {
 		return err
 	}

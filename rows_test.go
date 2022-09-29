@@ -165,10 +165,10 @@ func TestRowHeight(t *testing.T) {
 	assert.EqualError(t, err, "sheet SheetN does not exist")
 
 	// Test get row height with custom default row height.
-	assert.NoError(t, f.SetSheetFormatPr(sheet1,
-		DefaultRowHeight(30.0),
-		CustomHeight(true),
-	))
+	assert.NoError(t, f.SetSheetProps(sheet1, &SheetPropsOptions{
+		DefaultRowHeight: float64Ptr(30.0),
+		CustomHeight:     boolPtr(true),
+	}))
 	height, err = f.GetRowHeight(sheet1, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, 30.0, height)
@@ -880,7 +880,7 @@ func TestDuplicateRowTo(t *testing.T) {
 	assert.Equal(t, nil, f.DuplicateRowTo(sheetName, 1, 1))
 	// Test duplicate row on the blank worksheet
 	assert.Equal(t, nil, f.DuplicateRowTo(sheetName, 1, 2))
-	// Test duplicate row on the worksheet with illegal cell coordinates
+	// Test duplicate row on the worksheet with illegal cell reference
 	f.Sheet.Store("xl/worksheets/sheet1.xml", &xlsxWorksheet{
 		MergeCells: &xlsxMergeCells{Cells: []*xlsxMergeCell{{Ref: "A:B1"}}},
 	})
@@ -993,10 +993,6 @@ func TestNumberFormats(t *testing.T) {
 	}
 	assert.Equal(t, []string{"", "200", "450", "200", "510", "315", "127", "89", "348", "53", "37"}, cells[3])
 	assert.NoError(t, f.Close())
-}
-
-func TestRoundPrecision(t *testing.T) {
-	assert.Equal(t, "text", roundPrecision("text", 0))
 }
 
 func BenchmarkRows(b *testing.B) {

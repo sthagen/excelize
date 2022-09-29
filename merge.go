@@ -17,12 +17,12 @@ import "strings"
 func (mc *xlsxMergeCell) Rect() ([]int, error) {
 	var err error
 	if mc.rect == nil {
-		mc.rect, err = areaRefToCoordinates(mc.Ref)
+		mc.rect, err = rangeRefToCoordinates(mc.Ref)
 	}
 	return mc.rect, err
 }
 
-// MergeCell provides a function to merge cells by given coordinate area and
+// MergeCell provides a function to merge cells by given range reference and
 // sheet name. Merging cells only keeps the upper-left cell value, and
 // discards the other values. For example create a merged cell of D3:E9 on
 // Sheet1:
@@ -30,7 +30,7 @@ func (mc *xlsxMergeCell) Rect() ([]int, error) {
 //	err := f.MergeCell("Sheet1", "D3", "E9")
 //
 // If you create a merged cell that overlaps with another existing merged cell,
-// those merged cells that already exist will be removed. The cell coordinates
+// those merged cells that already exist will be removed. The cell references
 // tuple after merging in the following range will be: A1(x3,y1) D1(x2,y1)
 // A8(x3,y4) D8(x2,y4)
 //
@@ -46,11 +46,11 @@ func (mc *xlsxMergeCell) Rect() ([]int, error) {
 //	|A8(x3,y4)      C8(x4,y4)|
 //	+------------------------+
 func (f *File) MergeCell(sheet, hCell, vCell string) error {
-	rect, err := areaRefToCoordinates(hCell + ":" + vCell)
+	rect, err := rangeRefToCoordinates(hCell + ":" + vCell)
 	if err != nil {
 		return err
 	}
-	// Correct the coordinate area, such correct C1:B3 to B1:C3.
+	// Correct the range reference, such correct C1:B3 to B1:C3.
 	_ = sortCoordinates(rect)
 
 	hCell, _ = CoordinatesToCellName(rect[0], rect[1])
@@ -72,25 +72,25 @@ func (f *File) MergeCell(sheet, hCell, vCell string) error {
 	return err
 }
 
-// UnmergeCell provides a function to unmerge a given coordinate area.
-// For example unmerge area D3:E9 on Sheet1:
+// UnmergeCell provides a function to unmerge a given range reference.
+// For example unmerge range reference D3:E9 on Sheet1:
 //
 //	err := f.UnmergeCell("Sheet1", "D3", "E9")
 //
-// Attention: overlapped areas will also be unmerged.
-func (f *File) UnmergeCell(sheet string, hCell, vCell string) error {
+// Attention: overlapped range will also be unmerged.
+func (f *File) UnmergeCell(sheet, hCell, vCell string) error {
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {
 		return err
 	}
 	ws.Lock()
 	defer ws.Unlock()
-	rect1, err := areaRefToCoordinates(hCell + ":" + vCell)
+	rect1, err := rangeRefToCoordinates(hCell + ":" + vCell)
 	if err != nil {
 		return err
 	}
 
-	// Correct the coordinate area, such correct C1:B3 to B1:C3.
+	// Correct the range reference, such correct C1:B3 to B1:C3.
 	_ = sortCoordinates(rect1)
 
 	// return nil since no MergeCells in the sheet
@@ -105,7 +105,7 @@ func (f *File) UnmergeCell(sheet string, hCell, vCell string) error {
 		if mergeCell == nil {
 			continue
 		}
-		rect2, _ := areaRefToCoordinates(mergeCell.Ref)
+		rect2, _ := rangeRefToCoordinates(mergeCell.Ref)
 		if isOverlap(rect1, rect2) {
 			continue
 		}
@@ -135,8 +135,8 @@ func (f *File) GetMergeCells(sheet string) ([]MergeCell, error) {
 		mergeCells = make([]MergeCell, 0, len(ws.MergeCells.Cells))
 		for i := range ws.MergeCells.Cells {
 			ref := ws.MergeCells.Cells[i].Ref
-			axis := strings.Split(ref, ":")[0]
-			val, _ := f.GetCellValue(sheet, axis)
+			cell := strings.Split(ref, ":")[0]
+			val, _ := f.GetCellValue(sheet, cell)
 			mergeCells = append(mergeCells, []string{ref, val})
 		}
 	}
@@ -272,16 +272,14 @@ func (m *MergeCell) GetCellValue() string {
 	return (*m)[1]
 }
 
-// GetStartAxis returns the top left cell coordinates of merged range, for
+// GetStartAxis returns the top left cell reference of merged range, for
 // example: "C2".
 func (m *MergeCell) GetStartAxis() string {
-	axis := strings.Split((*m)[0], ":")
-	return axis[0]
+	return strings.Split((*m)[0], ":")[0]
 }
 
-// GetEndAxis returns the bottom right cell coordinates of merged range, for
+// GetEndAxis returns the bottom right cell reference of merged range, for
 // example: "D4".
 func (m *MergeCell) GetEndAxis() string {
-	axis := strings.Split((*m)[0], ":")
-	return axis[1]
+	return strings.Split((*m)[0], ":")[1]
 }

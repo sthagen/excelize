@@ -34,7 +34,7 @@ type StreamWriter struct {
 	worksheet       *xlsxWorksheet
 	rawData         bufferedWriter
 	mergeCellsCount int
-	mergeCells      string
+	mergeCells      strings.Builder
 	tableParts      string
 }
 
@@ -117,7 +117,7 @@ func (f *File) NewStreamWriter(sheet string) (*StreamWriter, error) {
 }
 
 // AddTable creates an Excel table for the StreamWriter using the given
-// coordinate area and format set. For example, create a table of A1:D5:
+// cell range and format set. For example, create a table of A1:D5:
 //
 //	err := sw.AddTable("A1", "D5", "")
 //
@@ -139,13 +139,13 @@ func (f *File) NewStreamWriter(sheet string) (*StreamWriter, error) {
 // called after the rows are written but before Flush.
 //
 // See File.AddTable for details on the table format.
-func (sw *StreamWriter) AddTable(hCell, vCell, format string) error {
-	formatSet, err := parseFormatTableSet(format)
+func (sw *StreamWriter) AddTable(hCell, vCell, opts string) error {
+	options, err := parseTableOptions(opts)
 	if err != nil {
 		return err
 	}
 
-	coordinates, err := areaRangeToCoordinates(hCell, vCell)
+	coordinates, err := cellRefsToCoordinates(hCell, vCell)
 	if err != nil {
 		return err
 	}
@@ -156,8 +156,8 @@ func (sw *StreamWriter) AddTable(hCell, vCell, format string) error {
 		coordinates[3]++
 	}
 
-	// Correct table reference coordinate area, such correct C1:B3 to B1:C3.
-	ref, err := sw.File.coordinatesToAreaRef(coordinates)
+	// Correct table reference range, such correct C1:B3 to B1:C3.
+	ref, err := sw.File.coordinatesToRangeRef(coordinates)
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func (sw *StreamWriter) AddTable(hCell, vCell, format string) error {
 
 	tableID := sw.File.countTables() + 1
 
-	name := formatSet.TableName
+	name := options.TableName
 	if name == "" {
 		name = "Table" + strconv.Itoa(tableID)
 	}
@@ -196,11 +196,11 @@ func (sw *StreamWriter) AddTable(hCell, vCell, format string) error {
 			TableColumn: tableColumn,
 		},
 		TableStyleInfo: &xlsxTableStyleInfo{
-			Name:              formatSet.TableStyle,
-			ShowFirstColumn:   formatSet.ShowFirstColumn,
-			ShowLastColumn:    formatSet.ShowLastColumn,
-			ShowRowStripes:    formatSet.ShowRowStripes,
-			ShowColumnStripes: formatSet.ShowColumnStripes,
+			Name:              options.TableStyle,
+			ShowFirstColumn:   options.ShowFirstColumn,
+			ShowLastColumn:    options.ShowLastColumn,
+			ShowRowStripes:    options.ShowRowStripes,
+			ShowColumnStripes: options.ShowColumnStripes,
 		},
 	}
 
@@ -302,14 +302,45 @@ type RowOpts struct {
 	StyleID int
 }
 
+// marshalAttrs prepare attributes of the row.
+func (r *RowOpts) marshalAttrs() (attrs string, err error) {
+	if r == nil {
+		return
+	}
+	if r.Height > MaxRowHeight {
+		err = ErrMaxRowHeight
+		return
+	}
+	if r.StyleID > 0 {
+		attrs += fmt.Sprintf(` s="%d" customFormat="true"`, r.StyleID)
+	}
+	if r.Height > 0 {
+		attrs += fmt.Sprintf(` ht="%v" customHeight="true"`, r.Height)
+	}
+	if r.Hidden {
+		attrs += ` hidden="true"`
+	}
+	return
+}
+
+// parseRowOpts provides a function to parse the optional settings for
+// *StreamWriter.SetRow.
+func parseRowOpts(opts ...RowOpts) *RowOpts {
+	options := &RowOpts{}
+	for _, opt := range opts {
+		options = &opt
+	}
+	return options
+}
+
 // SetRow writes an array to stream rows by giving a worksheet name, starting
 // coordinate and a pointer to an array of values. Note that you must call the
 // 'Flush' method to end the streaming writing process.
 //
 // As a special case, if Cell is used as a value, then the Cell.StyleID will be
 // applied to that cell.
-func (sw *StreamWriter) SetRow(axis string, values []interface{}, opts ...RowOpts) error {
-	col, row, err := CellNameToCoordinates(axis)
+func (sw *StreamWriter) SetRow(cell string, values []interface{}, opts ...RowOpts) error {
+	col, row, err := CellNameToCoordinates(cell)
 	if err != nil {
 		return err
 	}
@@ -320,20 +351,21 @@ func (sw *StreamWriter) SetRow(axis string, values []interface{}, opts ...RowOpt
 		_, _ = sw.rawData.WriteString(`<sheetData>`)
 		sw.sheetWritten = true
 	}
-	attrs, err := marshalRowAttrs(opts...)
+	options := parseRowOpts(opts...)
+	attrs, err := options.marshalAttrs()
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(&sw.rawData, `<row r="%d"%s>`, row, attrs)
+	_, _ = fmt.Fprintf(&sw.rawData, `<row r="%d"%s>`, row, attrs)
 	for i, val := range values {
 		if val == nil {
 			continue
 		}
-		axis, err := CoordinatesToCellName(col+i, row)
+		ref, err := CoordinatesToCellName(col+i, row)
 		if err != nil {
 			return err
 		}
-		c := xlsxC{R: axis}
+		c := xlsxC{R: ref, S: options.StyleID}
 		if v, ok := val.(Cell); ok {
 			c.S = v.StyleID
 			val = v.Value
@@ -351,31 +383,6 @@ func (sw *StreamWriter) SetRow(axis string, values []interface{}, opts ...RowOpt
 	}
 	_, _ = sw.rawData.WriteString(`</row>`)
 	return sw.rawData.Sync()
-}
-
-// marshalRowAttrs prepare attributes of the row by given options.
-func marshalRowAttrs(opts ...RowOpts) (attrs string, err error) {
-	var opt *RowOpts
-	for i := range opts {
-		opt = &opts[i]
-	}
-	if opt == nil {
-		return
-	}
-	if opt.Height > MaxRowHeight {
-		err = ErrMaxRowHeight
-		return
-	}
-	if opt.StyleID > 0 {
-		attrs += fmt.Sprintf(` s="%d" customFormat="true"`, opt.StyleID)
-	}
-	if opt.Height > 0 {
-		attrs += fmt.Sprintf(` ht="%v" customHeight="true"`, opt.Height)
-	}
-	if opt.Hidden {
-		attrs += ` hidden="true"`
-	}
-	return
 }
 
 // SetColWidth provides a function to set the width of a single column or
@@ -401,16 +408,20 @@ func (sw *StreamWriter) SetColWidth(min, max int, width float64) error {
 	return nil
 }
 
-// MergeCell provides a function to merge cells by a given coordinate area for
+// MergeCell provides a function to merge cells by a given range reference for
 // the StreamWriter. Don't create a merged cell that overlaps with another
 // existing merged cell.
 func (sw *StreamWriter) MergeCell(hCell, vCell string) error {
-	_, err := areaRangeToCoordinates(hCell, vCell)
+	_, err := cellRefsToCoordinates(hCell, vCell)
 	if err != nil {
 		return err
 	}
 	sw.mergeCellsCount++
-	sw.mergeCells += fmt.Sprintf(`<mergeCell ref="%s:%s"/>`, hCell, vCell)
+	_, _ = sw.mergeCells.WriteString(`<mergeCell ref="`)
+	_, _ = sw.mergeCells.WriteString(hCell)
+	_, _ = sw.mergeCells.WriteString(`:`)
+	_, _ = sw.mergeCells.WriteString(vCell)
+	_, _ = sw.mergeCells.WriteString(`"/>`)
 	return nil
 }
 
@@ -519,10 +530,15 @@ func (sw *StreamWriter) Flush() error {
 	}
 	_, _ = sw.rawData.WriteString(`</sheetData>`)
 	bulkAppendFields(&sw.rawData, sw.worksheet, 8, 15)
+	mergeCells := strings.Builder{}
 	if sw.mergeCellsCount > 0 {
-		sw.mergeCells = fmt.Sprintf(`<mergeCells count="%d">%s</mergeCells>`, sw.mergeCellsCount, sw.mergeCells)
+		_, _ = mergeCells.WriteString(`<mergeCells count="`)
+		_, _ = mergeCells.WriteString(strconv.Itoa(sw.mergeCellsCount))
+		_, _ = mergeCells.WriteString(`">`)
+		_, _ = mergeCells.WriteString(sw.mergeCells.String())
+		_, _ = mergeCells.WriteString(`</mergeCells>`)
 	}
-	_, _ = sw.rawData.WriteString(sw.mergeCells)
+	_, _ = sw.rawData.WriteString(mergeCells.String())
 	bulkAppendFields(&sw.rawData, sw.worksheet, 17, 38)
 	_, _ = sw.rawData.WriteString(sw.tableParts)
 	bulkAppendFields(&sw.rawData, sw.worksheet, 40, 40)

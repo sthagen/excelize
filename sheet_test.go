@@ -8,77 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mohae/deepcopy"
 	"github.com/stretchr/testify/assert"
 )
-
-func ExampleFile_SetPageLayout() {
-	f := NewFile()
-	if err := f.SetPageLayout(
-		"Sheet1",
-		BlackAndWhite(true),
-		FirstPageNumber(2),
-		PageLayoutOrientation(OrientationLandscape),
-		PageLayoutPaperSize(10),
-		FitToHeight(2),
-		FitToWidth(2),
-		PageLayoutScale(50),
-	); err != nil {
-		fmt.Println(err)
-	}
-	// Output:
-}
-
-func ExampleFile_GetPageLayout() {
-	f := NewFile()
-	var (
-		blackAndWhite   BlackAndWhite
-		firstPageNumber FirstPageNumber
-		orientation     PageLayoutOrientation
-		paperSize       PageLayoutPaperSize
-		fitToHeight     FitToHeight
-		fitToWidth      FitToWidth
-		scale           PageLayoutScale
-	)
-	if err := f.GetPageLayout("Sheet1", &blackAndWhite); err != nil {
-		fmt.Println(err)
-	}
-	if err := f.GetPageLayout("Sheet1", &firstPageNumber); err != nil {
-		fmt.Println(err)
-	}
-	if err := f.GetPageLayout("Sheet1", &orientation); err != nil {
-		fmt.Println(err)
-	}
-	if err := f.GetPageLayout("Sheet1", &paperSize); err != nil {
-		fmt.Println(err)
-	}
-	if err := f.GetPageLayout("Sheet1", &fitToHeight); err != nil {
-		fmt.Println(err)
-	}
-	if err := f.GetPageLayout("Sheet1", &fitToWidth); err != nil {
-		fmt.Println(err)
-	}
-	if err := f.GetPageLayout("Sheet1", &scale); err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println("Defaults:")
-	fmt.Printf("- print black and white: %t\n", blackAndWhite)
-	fmt.Printf("- page number for first printed page: %d\n", firstPageNumber)
-	fmt.Printf("- orientation: %q\n", orientation)
-	fmt.Printf("- paper size: %d\n", paperSize)
-	fmt.Printf("- fit to height: %d\n", fitToHeight)
-	fmt.Printf("- fit to width: %d\n", fitToWidth)
-	fmt.Printf("- scale: %d\n", scale)
-	// Output:
-	// Defaults:
-	// - print black and white: false
-	// - page number for first printed page: 1
-	// - orientation: "portrait"
-	// - paper size: 1
-	// - fit to height: 1
-	// - fit to width: 1
-	// - scale: 100
-}
 
 func TestNewSheet(t *testing.T) {
 	f := NewFile()
@@ -90,6 +21,8 @@ func TestNewSheet(t *testing.T) {
 	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestNewSheet.xlsx")))
 	// create new worksheet with already exists name
 	assert.Equal(t, f.GetSheetIndex("Sheet2"), f.NewSheet("Sheet2"))
+	// create new worksheet with empty sheet name
+	assert.Equal(t, -1, f.NewSheet(":\\/?*[]"))
 }
 
 func TestSetPane(t *testing.T) {
@@ -110,68 +43,6 @@ func TestSetPane(t *testing.T) {
 	f.Sheet.Delete("xl/worksheets/sheet1.xml")
 	f.Pkg.Store("xl/worksheets/sheet1.xml", []byte(`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>`))
 	assert.NoError(t, f.SetPanes("Sheet1", `{"freeze":true,"split":false,"x_split":1,"y_split":0,"top_left_cell":"B1","active_pane":"topRight","panes":[{"sqref":"K16","active_cell":"K16","pane":"topRight"}]}`))
-}
-
-func TestPageLayoutOption(t *testing.T) {
-	const sheet = "Sheet1"
-
-	testData := []struct {
-		container  PageLayoutOptionPtr
-		nonDefault PageLayoutOption
-	}{
-		{new(BlackAndWhite), BlackAndWhite(true)},
-		{new(FirstPageNumber), FirstPageNumber(2)},
-		{new(PageLayoutOrientation), PageLayoutOrientation(OrientationLandscape)},
-		{new(PageLayoutPaperSize), PageLayoutPaperSize(10)},
-		{new(FitToHeight), FitToHeight(2)},
-		{new(FitToWidth), FitToWidth(2)},
-		{new(PageLayoutScale), PageLayoutScale(50)},
-	}
-
-	for i, test := range testData {
-		t.Run(fmt.Sprintf("TestData%d", i), func(t *testing.T) {
-			opt := test.nonDefault
-			t.Logf("option %T", opt)
-
-			def := deepcopy.Copy(test.container).(PageLayoutOptionPtr)
-			val1 := deepcopy.Copy(def).(PageLayoutOptionPtr)
-			val2 := deepcopy.Copy(def).(PageLayoutOptionPtr)
-
-			f := NewFile()
-			// Get the default value
-			assert.NoError(t, f.GetPageLayout(sheet, def), opt)
-			// Get again and check
-			assert.NoError(t, f.GetPageLayout(sheet, val1), opt)
-			if !assert.Equal(t, val1, def, opt) {
-				t.FailNow()
-			}
-			// Set the same value
-			assert.NoError(t, f.SetPageLayout(sheet, val1), opt)
-			// Get again and check
-			assert.NoError(t, f.GetPageLayout(sheet, val1), opt)
-			if !assert.Equal(t, val1, def, "%T: value should not have changed", opt) {
-				t.FailNow()
-			}
-			// Set a different value
-			assert.NoError(t, f.SetPageLayout(sheet, test.nonDefault), opt)
-			assert.NoError(t, f.GetPageLayout(sheet, val1), opt)
-			// Get again and compare
-			assert.NoError(t, f.GetPageLayout(sheet, val2), opt)
-			if !assert.Equal(t, val1, val2, "%T: value should not have changed", opt) {
-				t.FailNow()
-			}
-			// Value should not be the same as the default
-			if !assert.NotEqual(t, def, val1, "%T: value should have changed from default", opt) {
-				t.FailNow()
-			}
-			// Restore the default value
-			assert.NoError(t, f.SetPageLayout(sheet, def), opt)
-			assert.NoError(t, f.GetPageLayout(sheet, val1), opt)
-			if !assert.Equal(t, def, val1) {
-				t.FailNow()
-			}
-		})
-	}
 }
 
 func TestSearchSheet(t *testing.T) {
@@ -218,20 +89,38 @@ func TestSearchSheet(t *testing.T) {
 
 	f.Pkg.Store("xl/worksheets/sheet1.xml", []byte(`<worksheet><sheetData><row r="0"><c r="A1" t="str"><v>A</v></c></row></sheetData></worksheet>`))
 	result, err = f.SearchSheet("Sheet1", "A")
-	assert.EqualError(t, err, "invalid cell coordinates [1, 0]")
+	assert.EqualError(t, err, "invalid cell reference [1, 0]")
 	assert.Equal(t, []string(nil), result)
 }
 
 func TestSetPageLayout(t *testing.T) {
 	f := NewFile()
+	assert.NoError(t, f.SetPageLayout("Sheet1", nil))
+	ws, ok := f.Sheet.Load("xl/worksheets/sheet1.xml")
+	assert.True(t, ok)
+	ws.(*xlsxWorksheet).PageSetUp = nil
+	expected := PageLayoutOptions{
+		Size:            intPtr(1),
+		Orientation:     stringPtr("landscape"),
+		FirstPageNumber: uintPtr(1),
+		AdjustTo:        uintPtr(120),
+		FitToHeight:     intPtr(2),
+		FitToWidth:      intPtr(2),
+		BlackAndWhite:   boolPtr(true),
+	}
+	assert.NoError(t, f.SetPageLayout("Sheet1", &expected))
+	opts, err := f.GetPageLayout("Sheet1")
+	assert.NoError(t, err)
+	assert.Equal(t, expected, opts)
 	// Test set page layout on not exists worksheet.
-	assert.EqualError(t, f.SetPageLayout("SheetN"), "sheet SheetN does not exist")
+	assert.EqualError(t, f.SetPageLayout("SheetN", nil), "sheet SheetN does not exist")
 }
 
 func TestGetPageLayout(t *testing.T) {
 	f := NewFile()
 	// Test get page layout on not exists worksheet.
-	assert.EqualError(t, f.GetPageLayout("SheetN"), "sheet SheetN does not exist")
+	_, err := f.GetPageLayout("SheetN")
+	assert.EqualError(t, err, "sheet SheetN does not exist")
 }
 
 func TestSetHeaderFooter(t *testing.T) {
@@ -240,20 +129,20 @@ func TestSetHeaderFooter(t *testing.T) {
 	// Test set header and footer on not exists worksheet.
 	assert.EqualError(t, f.SetHeaderFooter("SheetN", nil), "sheet SheetN does not exist")
 	// Test set header and footer with illegal setting.
-	assert.EqualError(t, f.SetHeaderFooter("Sheet1", &FormatHeaderFooter{
+	assert.EqualError(t, f.SetHeaderFooter("Sheet1", &HeaderFooterOptions{
 		OddHeader: strings.Repeat("c", MaxFieldLength+1),
 	}), newFieldLengthError("OddHeader").Error())
 
 	assert.NoError(t, f.SetHeaderFooter("Sheet1", nil))
 	text := strings.Repeat("一", MaxFieldLength)
-	assert.NoError(t, f.SetHeaderFooter("Sheet1", &FormatHeaderFooter{
+	assert.NoError(t, f.SetHeaderFooter("Sheet1", &HeaderFooterOptions{
 		OddHeader:   text,
 		OddFooter:   text,
 		EvenHeader:  text,
 		EvenFooter:  text,
 		FirstHeader: text,
 	}))
-	assert.NoError(t, f.SetHeaderFooter("Sheet1", &FormatHeaderFooter{
+	assert.NoError(t, f.SetHeaderFooter("Sheet1", &HeaderFooterOptions{
 		DifferentFirst:   true,
 		DifferentOddEven: true,
 		OddHeader:        "&R&P",

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"regexp"
 	"strconv"
@@ -261,7 +262,7 @@ func CellNameToCoordinates(cell string) (int, int, error) {
 //	excelize.CoordinatesToCellName(1, 1, true) // returns "$A$1", nil
 func CoordinatesToCellName(col, row int, abs ...bool) (string, error) {
 	if col < 1 || row < 1 {
-		return "", fmt.Errorf("invalid cell coordinates [%d, %d]", col, row)
+		return "", fmt.Errorf("invalid cell reference [%d, %d]", col, row)
 	}
 	sign := ""
 	for _, a := range abs {
@@ -273,19 +274,19 @@ func CoordinatesToCellName(col, row int, abs ...bool) (string, error) {
 	return sign + colName + sign + strconv.Itoa(row), err
 }
 
-// areaRefToCoordinates provides a function to convert area reference to a
+// rangeRefToCoordinates provides a function to convert range reference to a
 // pair of coordinates.
-func areaRefToCoordinates(ref string) ([]int, error) {
+func rangeRefToCoordinates(ref string) ([]int, error) {
 	rng := strings.Split(strings.ReplaceAll(ref, "$", ""), ":")
 	if len(rng) < 2 {
 		return nil, ErrParameterInvalid
 	}
-	return areaRangeToCoordinates(rng[0], rng[1])
+	return cellRefsToCoordinates(rng[0], rng[1])
 }
 
-// areaRangeToCoordinates provides a function to convert cell range to a
+// cellRefsToCoordinates provides a function to convert cell range to a
 // pair of coordinates.
-func areaRangeToCoordinates(firstCell, lastCell string) ([]int, error) {
+func cellRefsToCoordinates(firstCell, lastCell string) ([]int, error) {
 	coordinates := make([]int, 4)
 	var err error
 	coordinates[0], coordinates[1], err = CellNameToCoordinates(firstCell)
@@ -296,7 +297,7 @@ func areaRangeToCoordinates(firstCell, lastCell string) ([]int, error) {
 	return coordinates, err
 }
 
-// sortCoordinates provides a function to correct the coordinate area, such
+// sortCoordinates provides a function to correct the cell range, such
 // correct C1:B3 to B1:C3.
 func sortCoordinates(coordinates []int) error {
 	if len(coordinates) != 4 {
@@ -311,9 +312,9 @@ func sortCoordinates(coordinates []int) error {
 	return nil
 }
 
-// coordinatesToAreaRef provides a function to convert a pair of coordinates
-// to area reference.
-func (f *File) coordinatesToAreaRef(coordinates []int) (string, error) {
+// coordinatesToRangeRef provides a function to convert a pair of coordinates
+// to range reference.
+func (f *File) coordinatesToRangeRef(coordinates []int) (string, error) {
 	if len(coordinates) != 4 {
 		return "", ErrCoordinates
 	}
@@ -349,7 +350,7 @@ func (f *File) getDefinedNameRefTo(definedNameName string, currentSheet string) 
 	return
 }
 
-// flatSqref convert reference sequence to cell coordinates list.
+// flatSqref convert reference sequence to cell reference list.
 func (f *File) flatSqref(sqref string) (cells map[int][][]int, err error) {
 	var coordinates []int
 	cells = make(map[int][][]int)
@@ -364,7 +365,7 @@ func (f *File) flatSqref(sqref string) (cells map[int][][]int, err error) {
 			}
 			cells[col] = append(cells[col], []int{col, row})
 		case 2:
-			if coordinates, err = areaRefToCoordinates(ref); err != nil {
+			if coordinates, err = rangeRefToCoordinates(ref); err != nil {
 				return
 			}
 			_ = sortCoordinates(coordinates)
@@ -421,19 +422,14 @@ func boolPtr(b bool) *bool { return &b }
 // intPtr returns a pointer to an int with the given value.
 func intPtr(i int) *int { return &i }
 
+// uintPtr returns a pointer to an int with the given value.
+func uintPtr(i uint) *uint { return &i }
+
 // float64Ptr returns a pointer to a float64 with the given value.
 func float64Ptr(f float64) *float64 { return &f }
 
 // stringPtr returns a pointer to a string with the given value.
 func stringPtr(s string) *string { return &s }
-
-// defaultTrue returns true if b is nil, or the pointed value.
-func defaultTrue(b *bool) bool {
-	if b == nil {
-		return true
-	}
-	return *b
-}
 
 // MarshalXML convert the boolean data type to literal values 0 or 1 on
 // serialization.
@@ -498,11 +494,11 @@ func (avb *attrValBool) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 	return nil
 }
 
-// parseFormatSet provides a method to convert format string to []byte and
+// fallbackOptions provides a method to convert format string to []byte and
 // handle empty string.
-func parseFormatSet(formatSet string) []byte {
-	if formatSet != "" {
-		return []byte(formatSet)
+func fallbackOptions(opts string) []byte {
+	if opts != "" {
+		return []byte(opts)
 	}
 	return []byte("{}")
 }
@@ -524,14 +520,14 @@ func namespaceStrictToTransitional(content []byte) []byte {
 	return content
 }
 
-// bytesReplace replace old bytes with given new.
-func bytesReplace(s, old, new []byte, n int) []byte {
+// bytesReplace replace source bytes with given target.
+func bytesReplace(s, source, target []byte, n int) []byte {
 	if n == 0 {
 		return s
 	}
 
-	if len(old) < len(new) {
-		return bytes.Replace(s, old, new, n)
+	if len(source) < len(target) {
+		return bytes.Replace(s, source, target, n)
 	}
 
 	if n < 0 {
@@ -540,14 +536,14 @@ func bytesReplace(s, old, new []byte, n int) []byte {
 
 	var wid, i, j, w int
 	for i, j = 0, 0; i < len(s) && j < n; j++ {
-		wid = bytes.Index(s[i:], old)
+		wid = bytes.Index(s[i:], source)
 		if wid < 0 {
 			break
 		}
 
 		w += copy(s[w:], s[i:i+wid])
-		w += copy(s[w:], new)
-		i += wid + len(old)
+		w += copy(s[w:], target)
+		i += wid + len(source)
 	}
 
 	w += copy(s[w:], s[i:])
@@ -691,34 +687,16 @@ func (f *File) addSheetNameSpace(sheet string, ns xml.Attr) {
 
 // isNumeric determines whether an expression is a valid numeric type and get
 // the precision for the numeric.
-func isNumeric(s string) (bool, int) {
-	dot, e, n, p := false, false, false, 0
-	for i, v := range s {
-		if v == '.' {
-			if dot {
-				return false, 0
-			}
-			dot = true
-		} else if v == 'E' || v == 'e' {
-			e = true
-		} else if v < '0' || v > '9' {
-			if i == 0 && v == '-' {
-				continue
-			}
-			if e && v == '-' {
-				return true, 0
-			}
-			if e && v == '+' {
-				p = 15
-				continue
-			}
-			return false, 0
-		} else {
-			p++
-		}
-		n = true
+func isNumeric(s string) (bool, int, float64) {
+	var decimal big.Float
+	_, ok := decimal.SetString(s)
+	if !ok {
+		return false, 0, 0
 	}
-	return n, p
+	var noScientificNotation string
+	flt, _ := decimal.Float64()
+	noScientificNotation = strconv.FormatFloat(flt, 'f', -1, 64)
+	return true, len(strings.ReplaceAll(noScientificNotation, ".", "")), flt
 }
 
 var (
