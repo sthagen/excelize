@@ -63,6 +63,7 @@ const (
 	Col3DCylinderPercentStacked = "col3DCylinderPercentStacked"
 	Doughnut                    = "doughnut"
 	Line                        = "line"
+	Line3D                      = "line3D"
 	Pie                         = "pie"
 	Pie3D                       = "pie3D"
 	PieOfPieChart               = "pieOfPie"
@@ -122,6 +123,7 @@ var (
 		Col3DCylinderPercentStacked: 15,
 		Doughnut:                    0,
 		Line:                        0,
+		Line3D:                      20,
 		Pie:                         0,
 		Pie3D:                       30,
 		PieOfPieChart:               0,
@@ -176,6 +178,7 @@ var (
 		Col3DCylinderPercentStacked: 20,
 		Doughnut:                    0,
 		Line:                        0,
+		Line3D:                      15,
 		Pie:                         0,
 		Pie3D:                       0,
 		PieOfPieChart:               0,
@@ -194,6 +197,7 @@ var (
 		ColPercentStacked: 100,
 	}
 	chartView3DPerspective = map[string]int{
+		Line3D:           30,
 		Contour:          0,
 		WireframeContour: 0,
 	}
@@ -240,6 +244,7 @@ var (
 		Col3DCylinderPercentStacked: 1,
 		Doughnut:                    0,
 		Line:                        0,
+		Line3D:                      0,
 		Pie:                         0,
 		Pie3D:                       0,
 		PieOfPieChart:               0,
@@ -302,6 +307,7 @@ var (
 		Col3DCylinderPercentStacked: "0%",
 		Doughnut:                    "General",
 		Line:                        "General",
+		Line3D:                      "General",
 		Pie:                         "General",
 		Pie3D:                       "General",
 		PieOfPieChart:               "General",
@@ -358,6 +364,7 @@ var (
 		Col3DCylinderPercentStacked: "between",
 		Doughnut:                    "between",
 		Line:                        "between",
+		Line3D:                      "between",
 		Pie:                         "between",
 		Pie3D:                       "between",
 		PieOfPieChart:               "between",
@@ -413,6 +420,7 @@ var (
 		Col3DCylinderStacked:        "stacked",
 		Col3DCylinderPercentStacked: "percentStacked",
 		Line:                        "standard",
+		Line3D:                      "standard",
 	}
 	plotAreaChartBarDir = map[string]string{
 		Bar:                         "bar",
@@ -450,6 +458,7 @@ var (
 		Col3DCylinderStacked:        "col",
 		Col3DCylinderPercentStacked: "col",
 		Line:                        "standard",
+		Line3D:                      "standard",
 	}
 	orientation = map[bool]string{
 		true:  "maxMin",
@@ -624,6 +633,7 @@ func parseChartOptions(opts string) (*chartOptions, error) {
 //	 col3DCylinderPercentStacked | 3D cylinder percent stacked column chart
 //	 doughnut                    | doughnut chart
 //	 line                        | line chart
+//	 line3D                      | 3D line chart
 //	 pie                         | pie chart
 //	 pie3D                       | 3D pie chart
 //	 pieOfPie                    | pie of pie chart
@@ -692,7 +702,7 @@ func parseChartOptions(opts string) (*chartOptions, error) {
 //
 //	title
 //
-// name: Set the name (title) for the chart. The name is displayed above the chart. The name can also be a formula such as Sheet1!$A$1 or a list with a sheetname. The name property is optional. The default is to have no chart title.
+// name: Set the name (title) for the chart. The name is displayed above the chart. The name can also be a formula such as Sheet1!$A$1 or a list with a sheet name. The name property is optional. The default is to have no chart title.
 //
 // Specifies how blank cells are plotted on the chart by show_blanks_as. The default value is gap. The options that can be set are:
 //
@@ -740,6 +750,7 @@ func parseChartOptions(opts string) (*chartOptions, error) {
 //	reverse_order
 //	maximum
 //	minimum
+//	font
 //
 // The properties of y_axis that can be set are:
 //
@@ -747,15 +758,17 @@ func parseChartOptions(opts string) (*chartOptions, error) {
 //	major_grid_lines
 //	minor_grid_lines
 //	major_unit
+//	tick_label_skip
 //	reverse_order
 //	maximum
 //	minimum
+//	font
 //
 // none: Disable axes.
 //
-// major_grid_lines: Specifies major gridlines.
+// major_grid_lines: Specifies major grid lines.
 //
-// minor_grid_lines: Specifies minor gridlines.
+// minor_grid_lines: Specifies minor grid lines.
 //
 // major_unit: Specifies the distance between major ticks. Shall contain a positive floating-point number. The major_unit property is optional. The default value is auto.
 //
@@ -766,6 +779,17 @@ func parseChartOptions(opts string) (*chartOptions, error) {
 // maximum: Specifies that the fixed maximum, 0 is auto. The maximum property is optional. The default value is auto.
 //
 // minimum: Specifies that the fixed minimum, 0 is auto. The minimum property is optional. The default value is auto.
+//
+// font: Specifies that the font of the horizontal and vertical axis. The properties of font that can be set are:
+//
+//	bold
+//	italic
+//	underline
+//	family
+//	size
+//	strike
+//	color
+//	vertAlign
 //
 // Set chart size by dimension property. The dimension property is optional. The default width is 480, and height is 290.
 //

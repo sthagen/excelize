@@ -309,6 +309,7 @@ type cPlotArea struct {
 	BubbleChart    *cCharts `xml:"bubbleChart"`
 	DoughnutChart  *cCharts `xml:"doughnutChart"`
 	LineChart      *cCharts `xml:"lineChart"`
+	Line3DChart    *cCharts `xml:"line3DChart"`
 	PieChart       *cCharts `xml:"pieChart"`
 	Pie3DChart     *cCharts `xml:"pie3DChart"`
 	OfPieChart     *cCharts `xml:"ofPieChart"`
@@ -475,7 +476,7 @@ type cNumCache struct {
 	PtCount    *attrValInt `xml:"ptCount"`
 }
 
-// cDLbls (Data Lables) directly maps the dLbls element. This element serves
+// cDLbls (Data Labels) directly maps the dLbls element. This element serves
 // as a root element that specifies the settings for the data labels for an
 // entire series or the entire chart. It contains child elements that specify
 // the specific formatting and positioning settings.
@@ -520,31 +521,26 @@ type cPageMargins struct {
 
 // chartAxisOptions directly maps the format settings of the chart axis.
 type chartAxisOptions struct {
-	None                bool     `json:"none"`
-	Crossing            string   `json:"crossing"`
-	MajorGridlines      bool     `json:"major_grid_lines"`
-	MinorGridlines      bool     `json:"minor_grid_lines"`
-	MajorTickMark       string   `json:"major_tick_mark"`
-	MinorTickMark       string   `json:"minor_tick_mark"`
-	MinorUnitType       string   `json:"minor_unit_type"`
-	MajorUnit           float64  `json:"major_unit"`
-	MajorUnitType       string   `json:"major_unit_type"`
-	TickLabelSkip       int      `json:"tick_label_skip"`
-	DisplayUnits        string   `json:"display_units"`
-	DisplayUnitsVisible bool     `json:"display_units_visible"`
-	DateAxis            bool     `json:"date_axis"`
-	ReverseOrder        bool     `json:"reverse_order"`
-	Maximum             *float64 `json:"maximum"`
-	Minimum             *float64 `json:"minimum"`
-	NumFormat           string   `json:"num_format"`
-	NumFont             struct {
-		Color     string `json:"color"`
-		Bold      bool   `json:"bold"`
-		Italic    bool   `json:"italic"`
-		Underline bool   `json:"underline"`
-	} `json:"num_font"`
-	LogBase    float64       `json:"logbase"`
-	NameLayout layoutOptions `json:"name_layout"`
+	None                bool          `json:"none"`
+	Crossing            string        `json:"crossing"`
+	MajorGridlines      bool          `json:"major_grid_lines"`
+	MinorGridlines      bool          `json:"minor_grid_lines"`
+	MajorTickMark       string        `json:"major_tick_mark"`
+	MinorTickMark       string        `json:"minor_tick_mark"`
+	MinorUnitType       string        `json:"minor_unit_type"`
+	MajorUnit           float64       `json:"major_unit"`
+	MajorUnitType       string        `json:"major_unit_type"`
+	TickLabelSkip       int           `json:"tick_label_skip"`
+	DisplayUnits        string        `json:"display_units"`
+	DisplayUnitsVisible bool          `json:"display_units_visible"`
+	DateAxis            bool          `json:"date_axis"`
+	ReverseOrder        bool          `json:"reverse_order"`
+	Maximum             *float64      `json:"maximum"`
+	Minimum             *float64      `json:"minimum"`
+	NumFormat           string        `json:"number_format"`
+	Font                Font          `json:"font"`
+	LogBase             float64       `json:"logbase"`
+	NameLayout          layoutOptions `json:"name_layout"`
 }
 
 // chartDimensionOptions directly maps the dimension of the chart.

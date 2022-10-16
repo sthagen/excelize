@@ -873,6 +873,9 @@ var operatorType = map[string]string{
 // format as string type by given built-in number formats code and cell
 // string.
 func formatToInt(v, format string, date1904 bool) string {
+	if strings.Contains(v, "_") {
+		return v
+	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return v
@@ -884,6 +887,9 @@ func formatToInt(v, format string, date1904 bool) string {
 // format as string type by given built-in number formats code and cell
 // string.
 func formatToFloat(v, format string, date1904 bool) string {
+	if strings.Contains(v, "_") {
+		return v
+	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return v
@@ -894,6 +900,9 @@ func formatToFloat(v, format string, date1904 bool) string {
 // formatToA provides a function to convert original string to special format
 // as string type by given built-in number formats code and cell string.
 func formatToA(v, format string, date1904 bool) string {
+	if strings.Contains(v, "_") {
+		return v
+	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return v
@@ -907,6 +916,9 @@ func formatToA(v, format string, date1904 bool) string {
 // formatToB provides a function to convert original string to special format
 // as string type by given built-in number formats code and cell string.
 func formatToB(v, format string, date1904 bool) string {
+	if strings.Contains(v, "_") {
+		return v
+	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return v
@@ -920,6 +932,9 @@ func formatToB(v, format string, date1904 bool) string {
 // formatToC provides a function to convert original string to special format
 // as string type by given built-in number formats code and cell string.
 func formatToC(v, format string, date1904 bool) string {
+	if strings.Contains(v, "_") {
+		return v
+	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return v
@@ -930,6 +945,9 @@ func formatToC(v, format string, date1904 bool) string {
 // formatToD provides a function to convert original string to special format
 // as string type by given built-in number formats code and cell string.
 func formatToD(v, format string, date1904 bool) string {
+	if strings.Contains(v, "_") {
+		return v
+	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return v
@@ -940,6 +958,9 @@ func formatToD(v, format string, date1904 bool) string {
 // formatToE provides a function to convert original string to special format
 // as string type by given built-in number formats code and cell string.
 func formatToE(v, format string, date1904 bool) string {
+	if strings.Contains(v, "_") {
+		return v
+	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return v
@@ -2063,22 +2084,42 @@ func (f *File) getFontID(styleSheet *xlsxStyleSheet, style *Style) (fontID int) 
 	return
 }
 
+// newFontColor set font color by given styles.
+func newFontColor(font *Font) *xlsxColor {
+	var fontColor *xlsxColor
+	prepareFontColor := func() {
+		if fontColor != nil {
+			return
+		}
+		fontColor = &xlsxColor{}
+	}
+	if font.Color != "" {
+		prepareFontColor()
+		fontColor.RGB = getPaletteColor(font.Color)
+	}
+	if font.ColorTheme != nil {
+		prepareFontColor()
+		fontColor.Theme = font.ColorTheme
+	}
+	if font.ColorTint != 0 {
+		prepareFontColor()
+		fontColor.Tint = font.ColorTint
+	}
+	return fontColor
+}
+
 // newFont provides a function to add font style by given cell format
 // settings.
 func (f *File) newFont(style *Style) *xlsxFont {
-	fontUnderlineType := map[string]string{"single": "single", "double": "double"}
 	if style.Font.Size < MinFontSize {
 		style.Font.Size = 11
 	}
-	if style.Font.Color == "" {
-		style.Font.Color = "#000000"
-	}
 	fnt := xlsxFont{
 		Sz:     &attrValFloat{Val: float64Ptr(style.Font.Size)},
-		Color:  &xlsxColor{RGB: getPaletteColor(style.Font.Color)},
 		Name:   &attrValString{Val: stringPtr(style.Font.Family)},
 		Family: &attrValInt{Val: intPtr(2)},
 	}
+	fnt.Color = newFontColor(style.Font)
 	if style.Font.Bold {
 		fnt.B = &attrValBool{Val: &style.Font.Bold}
 	}
@@ -2091,9 +2132,8 @@ func (f *File) newFont(style *Style) *xlsxFont {
 	if style.Font.Strike {
 		fnt.Strike = &attrValBool{Val: &style.Font.Strike}
 	}
-	val, ok := fontUnderlineType[style.Font.Underline]
-	if ok {
-		fnt.U = &attrValString{Val: stringPtr(val)}
+	if idx := inStrSlice(supportedUnderlineTypes, style.Font.Underline, true); idx != -1 {
+		fnt.U = &attrValString{Val: stringPtr(supportedUnderlineTypes[idx])}
 	}
 	return &fnt
 }
@@ -3079,13 +3119,10 @@ func drawCondFmtCellIs(p int, ct string, format *conditionalOptions) *xlsxCfRule
 		DxfID:    &format.Format,
 	}
 	// "between" and "not between" criteria require 2 values.
-	_, ok := map[string]bool{"between": true, "notBetween": true}[ct]
-	if ok {
-		c.Formula = append(c.Formula, format.Minimum)
-		c.Formula = append(c.Formula, format.Maximum)
+	if ct == "between" || ct == "notBetween" {
+		c.Formula = append(c.Formula, []string{format.Minimum, format.Maximum}...)
 	}
-	_, ok = map[string]bool{"equal": true, "notEqual": true, "greaterThan": true, "lessThan": true, "greaterThanOrEqual": true, "lessThanOrEqual": true, "containsText": true, "notContains": true, "beginsWith": true, "endsWith": true}[ct]
-	if ok {
+	if idx := inStrSlice([]string{"equal", "notEqual", "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual", "containsText", "notContains", "beginsWith", "endsWith"}, ct, true); idx != -1 {
 		c.Formula = append(c.Formula, format.Value)
 	}
 	return c
@@ -3103,8 +3140,7 @@ func drawCondFmtTop10(p int, ct string, format *conditionalOptions) *xlsxCfRule 
 		DxfID:    &format.Format,
 		Percent:  format.Percent,
 	}
-	rank, err := strconv.Atoi(format.Value)
-	if err == nil {
+	if rank, err := strconv.Atoi(format.Value); err == nil {
 		c.Rank = rank
 	}
 	return c

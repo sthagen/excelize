@@ -250,9 +250,9 @@ type xlsxSheetPr struct {
 // adjust the direction of grouper controls.
 type xlsxOutlinePr struct {
 	ApplyStyles        *bool `xml:"applyStyles,attr"`
-	SummaryBelow       bool  `xml:"summaryBelow,attr"`
-	SummaryRight       bool  `xml:"summaryRight,attr"`
-	ShowOutlineSymbols bool  `xml:"showOutlineSymbols,attr"`
+	SummaryBelow       *bool `xml:"summaryBelow,attr"`
+	SummaryRight       *bool `xml:"summaryRight,attr"`
+	ShowOutlineSymbols *bool `xml:"showOutlineSymbols,attr"`
 }
 
 // xlsxPageSetUpPr expresses page setup properties of the worksheet.
@@ -466,15 +466,14 @@ type xlsxC struct {
 	XMLName  xml.Name `xml:"c"`
 	XMLSpace xml.Attr `xml:"space,attr,omitempty"`
 	R        string   `xml:"r,attr,omitempty"` // Cell ID, e.g. A1
-	S        int      `xml:"s,attr,omitempty"` // Style reference.
-	// Str string `xml:"str,attr,omitempty"` // Style reference.
-	T  string  `xml:"t,attr,omitempty"`  // Type.
-	Cm *uint   `xml:"cm,attr,omitempty"` //
-	Vm *uint   `xml:"vm,attr,omitempty"` //
-	Ph *bool   `xml:"ph,attr,omitempty"` //
-	F  *xlsxF  `xml:"f,omitempty"`       // Formula
-	V  string  `xml:"v,omitempty"`       // Value
-	IS *xlsxSI `xml:"is"`
+	S        int      `xml:"s,attr,omitempty"` // Style reference
+	T        string   `xml:"t,attr,omitempty"` // Type
+	Cm       *uint    `xml:"cm,attr"`
+	Vm       *uint    `xml:"vm,attr"`
+	Ph       *bool    `xml:"ph,attr"`
+	F        *xlsxF   `xml:"f"`           // Formula
+	V        string   `xml:"v,omitempty"` // Value
+	IS       *xlsxSI  `xml:"is"`
 }
 
 // xlsxF represents a formula for the cell. The formula expression is
@@ -989,6 +988,9 @@ type SheetPropsOptions struct {
 	// OutlineSummaryBelow indicating whether summary rows appear below detail
 	// in an outline, when applying an outline.
 	OutlineSummaryBelow *bool `json:"outline_summary_below,omitempty"`
+	// OutlineSummaryRight indicating whether summary columns appear to the
+	// right of detail in an outline, when applying an outline.
+	OutlineSummaryRight *bool `json:"outline_summary_right,omitempty"`
 	// BaseColWidth specifies the number of characters of the maximum digit
 	// width of the normal style's font. This value does not include margin
 	// padding or extra padding for grid lines. It is only the number of

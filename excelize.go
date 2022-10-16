@@ -18,7 +18,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -137,7 +136,7 @@ func newFile() *File {
 // OpenReader read data stream from io.Reader and return a populated
 // spreadsheet file.
 func OpenReader(r io.Reader, opts ...Options) (*File, error) {
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +443,10 @@ func (f *File) UpdateLinkedValue() error {
 // AddVBAProject provides the method to add vbaProject.bin file which contains
 // functions and/or macros. The file extension should be .xlsm. For example:
 //
-//	if err := f.SetSheetPrOptions("Sheet1", excelize.CodeName("Sheet1")); err != nil {
+//	codeName := "Sheet1"
+//	if err := f.SetSheetProps("Sheet1", &excelize.SheetPropsOptions{
+//	    CodeName: &codeName,
+//	}); err != nil {
 //	    fmt.Println(err)
 //	}
 //	if err := f.AddVBAProject("vbaProject.bin"); err != nil {
@@ -485,7 +487,7 @@ func (f *File) AddVBAProject(bin string) error {
 			Type:   SourceRelationshipVBAProject,
 		})
 	}
-	file, _ := ioutil.ReadFile(filepath.Clean(bin))
+	file, _ := os.ReadFile(filepath.Clean(bin))
 	f.Pkg.Store("xl/vbaProject.bin", file)
 	return err
 }

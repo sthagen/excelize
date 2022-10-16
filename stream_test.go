@@ -3,7 +3,6 @@ package excelize
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -52,11 +51,14 @@ func TestStreamWriter(t *testing.T) {
 	row[0] = []byte("Word")
 	assert.NoError(t, streamWriter.SetRow("A3", row))
 
-	// Test set cell with style.
+	// Test set cell with style and rich text.
 	styleID, err := file.NewStyle(&Style{Font: &Font{Color: "#777777"}})
 	assert.NoError(t, err)
 	assert.NoError(t, streamWriter.SetRow("A4", []interface{}{Cell{StyleID: styleID}, Cell{Formula: "SUM(A10,B10)"}}, RowOpts{Height: 45, StyleID: styleID}))
-	assert.NoError(t, streamWriter.SetRow("A5", []interface{}{&Cell{StyleID: styleID, Value: "cell"}, &Cell{Formula: "SUM(A10,B10)"}}))
+	assert.NoError(t, streamWriter.SetRow("A5", []interface{}{&Cell{StyleID: styleID, Value: "cell"}, &Cell{Formula: "SUM(A10,B10)"}, []RichTextRun{
+		{Text: "Rich ", Font: &Font{Color: "2354e8"}},
+		{Text: "Text", Font: &Font{Color: "e83723"}},
+	}}))
 	assert.NoError(t, streamWriter.SetRow("A6", []interface{}{time.Now()}))
 	assert.NoError(t, streamWriter.SetRow("A7", nil, RowOpts{Height: 20, Hidden: true, StyleID: styleID}))
 	assert.EqualError(t, streamWriter.SetRow("A7", nil, RowOpts{Height: MaxRowHeight + 1}), ErrMaxRowHeight.Error())
@@ -92,7 +94,7 @@ func TestStreamWriter(t *testing.T) {
 	assert.NoError(t, streamWriter.rawData.Close())
 	assert.Error(t, streamWriter.Flush())
 
-	streamWriter.rawData.tmp, err = ioutil.TempFile(os.TempDir(), "excelize-")
+	streamWriter.rawData.tmp, err = os.CreateTemp(os.TempDir(), "excelize-")
 	assert.NoError(t, err)
 	_, err = streamWriter.rawData.Reader()
 	assert.NoError(t, err)
@@ -128,7 +130,7 @@ func TestStreamWriter(t *testing.T) {
 		cells += len(row)
 	}
 	assert.NoError(t, rows.Close())
-	assert.Equal(t, 2559558, cells)
+	assert.Equal(t, 2559559, cells)
 	// Save spreadsheet with password.
 	assert.NoError(t, file.SaveAs(filepath.Join("test", "EncryptionTestStreamWriter.xlsx"), Options{Password: "password"}))
 	assert.NoError(t, file.Close())
@@ -143,7 +145,17 @@ func TestStreamSetColWidth(t *testing.T) {
 	assert.ErrorIs(t, streamWriter.SetColWidth(MaxColumns+1, 3, 20), ErrColumnNumber)
 	assert.EqualError(t, streamWriter.SetColWidth(1, 3, MaxColumnWidth+1), ErrColumnWidth.Error())
 	assert.NoError(t, streamWriter.SetRow("A1", []interface{}{"A", "B", "C"}))
-	assert.EqualError(t, streamWriter.SetColWidth(2, 3, 20), ErrStreamSetColWidth.Error())
+	assert.ErrorIs(t, streamWriter.SetColWidth(2, 3, 20), ErrStreamSetColWidth)
+}
+
+func TestStreamSetPanes(t *testing.T) {
+	file, paneOpts := NewFile(), `{"freeze":true,"split":false,"x_split":1,"y_split":0,"top_left_cell":"B1","active_pane":"topRight","panes":[{"sqref":"K16","active_cell":"K16","pane":"topRight"}]}`
+	streamWriter, err := file.NewStreamWriter("Sheet1")
+	assert.NoError(t, err)
+	assert.NoError(t, streamWriter.SetPanes(paneOpts))
+	assert.EqualError(t, streamWriter.SetPanes(""), "unexpected end of JSON input")
+	assert.NoError(t, streamWriter.SetRow("A1", []interface{}{"A", "B", "C"}))
+	assert.ErrorIs(t, streamWriter.SetPanes(paneOpts), ErrStreamSetPanes)
 }
 
 func TestStreamTable(t *testing.T) {
