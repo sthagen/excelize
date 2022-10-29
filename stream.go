@@ -48,6 +48,11 @@ type StreamWriter struct {
 // with numbers and style:
 //
 //	file := excelize.NewFile()
+//	defer func() {
+//	    if err := file.Close(); err != nil {
+//	        fmt.Println(err)
+//	    }
+//	}()
 //	streamWriter, err := file.NewStreamWriter("Sheet1")
 //	if err != nil {
 //	    fmt.Println(err)
@@ -263,7 +268,7 @@ func (sw *StreamWriter) getRowValues(hRow, hCol, vCol int) (res []string, err er
 			if col < hCol || col > vCol {
 				continue
 			}
-			res[col-hCol] = c.V
+			res[col-hCol], _ = c.getValueFrom(sw.File, nil, false)
 		}
 		return res, nil
 	}
@@ -369,11 +374,11 @@ func (sw *StreamWriter) SetRow(cell string, values []interface{}, opts ...RowOpt
 	if err != nil {
 		return err
 	}
-	sw.rawData.WriteString(`<row r="`)
-	sw.rawData.WriteString(strconv.Itoa(row))
-	sw.rawData.WriteString(`"`)
-	sw.rawData.WriteString(attrs.String())
-	sw.rawData.WriteString(`>`)
+	_, _ = sw.rawData.WriteString(`<row r="`)
+	_, _ = sw.rawData.WriteString(strconv.Itoa(row))
+	_, _ = sw.rawData.WriteString(`"`)
+	_, _ = sw.rawData.WriteString(attrs.String())
+	_, _ = sw.rawData.WriteString(`>`)
 	for i, val := range values {
 		if val == nil {
 			continue
@@ -462,7 +467,7 @@ func (sw *StreamWriter) MergeCell(hCell, vCell string) error {
 // setCellFormula provides a function to set formula of a cell.
 func setCellFormula(c *xlsxC, formula string) {
 	if formula != "" {
-		c.F = &xlsxF{Content: formula}
+		c.T, c.F = "str", &xlsxF{Content: formula}
 	}
 }
 
@@ -477,9 +482,9 @@ func (sw *StreamWriter) setCellValFunc(c *xlsxC, val interface{}) error {
 	case float64:
 		c.T, c.V = setCellFloat(val, -1, 64)
 	case string:
-		c.T, c.V, c.XMLSpace = setCellStr(val)
+		c.setCellValue(val)
 	case []byte:
-		c.T, c.V, c.XMLSpace = setCellStr(string(val))
+		c.setCellValue(string(val))
 	case time.Duration:
 		c.T, c.V = setCellDuration(val)
 	case time.Time:
@@ -488,20 +493,19 @@ func (sw *StreamWriter) setCellValFunc(c *xlsxC, val interface{}) error {
 		if wb != nil && wb.WorkbookPr != nil {
 			date1904 = wb.WorkbookPr.Date1904
 		}
-		c.T, c.V, isNum, err = setCellTime(val, date1904)
-		if isNum && c.S == 0 {
+		if isNum, err = c.setCellTime(val, date1904); isNum && c.S == 0 {
 			style, _ := sw.File.NewStyle(&Style{NumFmt: 22})
 			c.S = style
 		}
 	case bool:
 		c.T, c.V = setCellBool(val)
 	case nil:
-		c.T, c.V, c.XMLSpace = setCellStr("")
+		c.setCellValue("")
 	case []RichTextRun:
 		c.T, c.IS = "inlineStr", &xlsxSI{}
 		c.IS.R, err = setRichText(val)
 	default:
-		c.T, c.V, c.XMLSpace = setCellStr(fmt.Sprint(val))
+		c.setCellValue(fmt.Sprint(val))
 	}
 	return err
 }
@@ -569,10 +573,25 @@ func writeCell(buf *bufferedWriter, c xlsxC) {
 		_, _ = buf.WriteString(`</v>`)
 	}
 	if c.IS != nil {
-		is, _ := xml.Marshal(c.IS.R)
-		_, _ = buf.WriteString(`<is>`)
-		_, _ = buf.Write(is)
-		_, _ = buf.WriteString(`</is>`)
+		if len(c.IS.R) > 0 {
+			is, _ := xml.Marshal(c.IS.R)
+			_, _ = buf.WriteString(`<is>`)
+			_, _ = buf.Write(is)
+			_, _ = buf.WriteString(`</is>`)
+		}
+		if c.IS.T != nil {
+			_, _ = buf.WriteString(`<is><t`)
+			if c.IS.T.Space.Value != "" {
+				_, _ = buf.WriteString(` xml:`)
+				_, _ = buf.WriteString(c.IS.T.Space.Name.Local)
+				_, _ = buf.WriteString(`="`)
+				_, _ = buf.WriteString(c.IS.T.Space.Value)
+				_, _ = buf.WriteString(`"`)
+			}
+			_, _ = buf.WriteString(`>`)
+			_, _ = buf.Write([]byte(c.IS.T.Val))
+			_, _ = buf.WriteString(`</t></is>`)
+		}
 	}
 	_, _ = buf.WriteString(`</c>`)
 }
@@ -643,12 +662,12 @@ type bufferedWriter struct {
 	buf bytes.Buffer
 }
 
-// Write to the in-memory buffer. The err is always nil.
+// Write to the in-memory buffer. The error is always nil.
 func (bw *bufferedWriter) Write(p []byte) (n int, err error) {
 	return bw.buf.Write(p)
 }
 
-// WriteString wite to the in-memory buffer. The err is always nil.
+// WriteString write to the in-memory buffer. The error is always nil.
 func (bw *bufferedWriter) WriteString(p string) (n int, err error) {
 	return bw.buf.WriteString(p)
 }

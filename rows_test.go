@@ -203,12 +203,12 @@ func TestColumns(t *testing.T) {
 	_, err = rows.Columns()
 	assert.NoError(t, err)
 
-	rows.decoder = f.xmlNewDecoder(bytes.NewReader([]byte(`<worksheet><sheetData><row r="A"><c r="A1" t="s"><v>1</v></c></row><row r="A"><c r="2" t="str"><v>B</v></c></row></sheetData></worksheet>`)))
+	rows.decoder = f.xmlNewDecoder(bytes.NewReader([]byte(`<worksheet><sheetData><row r="A"><c r="A1" t="s"><v>1</v></c></row><row r="A"><c r="2" t="inlineStr"><is><t>B</t></is></c></row></sheetData></worksheet>`)))
 	assert.True(t, rows.Next())
 	_, err = rows.Columns()
 	assert.EqualError(t, err, `strconv.Atoi: parsing "A": invalid syntax`)
 
-	rows.decoder = f.xmlNewDecoder(bytes.NewReader([]byte(`<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>1</v></c></row><row r="A"><c r="2" t="str"><v>B</v></c></row></sheetData></worksheet>`)))
+	rows.decoder = f.xmlNewDecoder(bytes.NewReader([]byte(`<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>1</v></c></row><row r="A"><c r="2" t="inlineStr"><is><t>B</t></is></c></row></sheetData></worksheet>`)))
 	_, err = rows.Columns()
 	assert.NoError(t, err)
 
@@ -1048,7 +1048,7 @@ func TestNumberFormats(t *testing.T) {
 		{"A32", numFmt40, -8.8888666665555487, "(8.89)"},
 	} {
 		cell, styleID, value, expected := cases[0].(string), cases[1].(int), cases[2], cases[3].(string)
-		f.SetCellStyle("Sheet1", cell, cell, styleID)
+		assert.NoError(t, f.SetCellStyle("Sheet1", cell, cell, styleID))
 		assert.NoError(t, f.SetCellValue("Sheet1", cell, value))
 		result, err := f.GetCellValue("Sheet1", cell)
 		assert.NoError(t, err)

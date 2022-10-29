@@ -97,6 +97,9 @@ func (f *File) Close() error {
 		}
 		return true
 	})
+	for _, stream := range f.streams {
+		_ = stream.rawData.Close()
+	}
 	return err
 }
 
@@ -176,9 +179,10 @@ func (f *File) writeToZip(zw *zip.Writer) error {
 	f.workBookWriter()
 	f.workSheetWriter()
 	f.relsWriter()
-	f.sharedStringsLoader()
+	_ = f.sharedStringsLoader()
 	f.sharedStringsWriter()
 	f.styleSheetWriter()
+	f.themeWriter()
 
 	for path, stream := range f.streams {
 		fi, err := zw.Create(path)
@@ -195,7 +199,6 @@ func (f *File) writeToZip(zw *zip.Writer) error {
 		if err != nil {
 			return err
 		}
-		_ = stream.rawData.Close()
 	}
 	var err error
 	f.Pkg.Range(func(path, content interface{}) bool {

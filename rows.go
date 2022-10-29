@@ -447,54 +447,6 @@ func (f *File) sharedStringsReader() *xlsxSST {
 	return f.SharedStrings
 }
 
-// getValueFrom return a value from a column/row cell, this function is
-// intended to be used with for range on rows an argument with the spreadsheet
-// opened file.
-func (c *xlsxC) getValueFrom(f *File, d *xlsxSST, raw bool) (string, error) {
-	f.Lock()
-	defer f.Unlock()
-	switch c.T {
-	case "b":
-		if !raw {
-			if c.V == "1" {
-				return "TRUE", nil
-			}
-			if c.V == "0" {
-				return "FALSE", nil
-			}
-		}
-		return f.formattedValue(c.S, c.V, raw), nil
-	case "s":
-		if c.V != "" {
-			xlsxSI := 0
-			xlsxSI, _ = strconv.Atoi(c.V)
-			if _, ok := f.tempFiles.Load(defaultXMLPathSharedStrings); ok {
-				return f.formattedValue(c.S, f.getFromStringItem(xlsxSI), raw), nil
-			}
-			if len(d.SI) > xlsxSI {
-				return f.formattedValue(c.S, d.SI[xlsxSI].String(), raw), nil
-			}
-		}
-		return f.formattedValue(c.S, c.V, raw), nil
-	case "str":
-		return f.formattedValue(c.S, c.V, raw), nil
-	case "inlineStr":
-		if c.IS != nil {
-			return f.formattedValue(c.S, c.IS.String(), raw), nil
-		}
-		return f.formattedValue(c.S, c.V, raw), nil
-	default:
-		if isNum, precision, decimal := isNumeric(c.V); isNum && !raw {
-			if precision > 15 {
-				c.V = strconv.FormatFloat(decimal, 'G', 15, 64)
-			} else {
-				c.V = strconv.FormatFloat(decimal, 'f', -1, 64)
-			}
-		}
-		return f.formattedValue(c.S, c.V, raw), nil
-	}
-}
-
 // SetRowVisible provides a function to set visible of a single row by given
 // worksheet name and Excel row number. For example, hide row 2 in Sheet1:
 //
@@ -760,7 +712,7 @@ func (f *File) duplicateMergeCells(sheet string, ws *xlsxWorksheet, row, row2 in
 //	    <c r="G15" s="1" />
 //	</row>
 //
-// Noteice: this method could be very slow for large spreadsheets (more than
+// Notice: this method could be very slow for large spreadsheets (more than
 // 3000 rows one sheet).
 func checkRow(ws *xlsxWorksheet) error {
 	for rowIdx := range ws.SheetData.Row {
@@ -792,8 +744,8 @@ func checkRow(ws *xlsxWorksheet) error {
 		}
 
 		if colCount < lastCol {
-			oldList := rowData.C
-			newlist := make([]xlsxC, 0, lastCol)
+			sourceList := rowData.C
+			targetList := make([]xlsxC, 0, lastCol)
 
 			rowData.C = ws.SheetData.Row[rowIdx].C[:0]
 
@@ -802,13 +754,13 @@ func checkRow(ws *xlsxWorksheet) error {
 				if err != nil {
 					return err
 				}
-				newlist = append(newlist, xlsxC{R: cellName})
+				targetList = append(targetList, xlsxC{R: cellName})
 			}
 
-			rowData.C = newlist
+			rowData.C = targetList
 
-			for colIdx := range oldList {
-				colData := &oldList[colIdx]
+			for colIdx := range sourceList {
+				colData := &sourceList[colIdx]
 				colNum, _, err := CellNameToCoordinates(colData.R)
 				if err != nil {
 					return err

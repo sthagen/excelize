@@ -1057,6 +1057,15 @@ func (f *File) styleSheetWriter() {
 	}
 }
 
+// themeWriter provides a function to save xl/theme/theme1.xml after serialize
+// structure.
+func (f *File) themeWriter() {
+	if f.Theme != nil {
+		output, _ := xml.Marshal(f.Theme)
+		f.saveFileList(defaultXMLPathTheme, f.replaceNameSpaceBytes(defaultXMLPathTheme, output))
+	}
+}
+
 // sharedStringsWriter provides a function to save xl/sharedStrings.xml after
 // serialize structure.
 func (f *File) sharedStringsWriter() {
@@ -2163,6 +2172,10 @@ func newFontColor(font *Font) *xlsxColor {
 	if font.Color != "" {
 		prepareFontColor()
 		fontColor.RGB = getPaletteColor(font.Color)
+	}
+	if font.ColorIndexed >= 0 && font.ColorIndexed <= len(IndexedColorMapping)+1 {
+		prepareFontColor()
+		fontColor.Indexed = font.ColorIndexed
 	}
 	if font.ColorTheme != nil {
 		prepareFontColor()
@@ -3307,11 +3320,11 @@ func getPaletteColor(color string) string {
 // themeReader provides a function to get the pointer to the xl/theme/theme1.xml
 // structure after deserialization.
 func (f *File) themeReader() *xlsxTheme {
-	var (
-		err   error
-		theme xlsxTheme
-	)
-	if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML("xl/theme/theme1.xml")))).
+	if _, ok := f.Pkg.Load(defaultXMLPathTheme); !ok {
+		return nil
+	}
+	theme := xlsxTheme{XMLNSa: NameSpaceDrawingML.Value, XMLNSr: SourceRelationship.Value}
+	if err := f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readXML(defaultXMLPathTheme)))).
 		Decode(&theme); err != nil && err != io.EOF {
 		log.Printf("xml decoder error: %s", err)
 	}
