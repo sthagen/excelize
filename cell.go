@@ -175,13 +175,15 @@ func (c *xlsxC) hasValue() bool {
 // removeFormula delete formula for the cell.
 func (f *File) removeFormula(c *xlsxC, ws *xlsxWorksheet, sheet string) {
 	if c.F != nil && c.Vm == nil {
-		f.deleteCalcChain(f.getSheetID(sheet), c.R)
+		sheetID := f.getSheetID(sheet)
+		f.deleteCalcChain(sheetID, c.R)
 		if c.F.T == STCellFormulaTypeShared && c.F.Ref != "" {
 			si := c.F.Si
 			for r, row := range ws.SheetData.Row {
 				for col, cell := range row.C {
 					if cell.F != nil && cell.F.Si != nil && *cell.F.Si == *si {
 						ws.SheetData.Row[r].C[col].F = nil
+						f.deleteCalcChain(sheetID, cell.R)
 					}
 				}
 			}
@@ -902,31 +904,7 @@ func getCellRichText(si *xlsxSI) (runs []RichTextRun) {
 			Text: v.T.Val,
 		}
 		if v.RPr != nil {
-			font := Font{Underline: "none"}
-			font.Bold = v.RPr.B != nil
-			font.Italic = v.RPr.I != nil
-			if v.RPr.U != nil {
-				font.Underline = "single"
-				if v.RPr.U.Val != nil {
-					font.Underline = *v.RPr.U.Val
-				}
-			}
-			if v.RPr.RFont != nil && v.RPr.RFont.Val != nil {
-				font.Family = *v.RPr.RFont.Val
-			}
-			if v.RPr.Sz != nil && v.RPr.Sz.Val != nil {
-				font.Size = *v.RPr.Sz.Val
-			}
-			font.Strike = v.RPr.Strike != nil
-			if v.RPr.Color != nil {
-				font.Color = strings.TrimPrefix(v.RPr.Color.RGB, "FF")
-				if v.RPr.Color.Theme != nil {
-					font.ColorTheme = v.RPr.Color.Theme
-				}
-				font.ColorIndexed = v.RPr.Color.Indexed
-				font.ColorTint = v.RPr.Color.Tint
-			}
-			run.Font = &font
+			run.Font = newFont(v.RPr)
 		}
 		runs = append(runs, run)
 	}
@@ -983,6 +961,35 @@ func newRpr(fnt *Font) *xlsxRPr {
 	}
 	rpr.Color = newFontColor(fnt)
 	return &rpr
+}
+
+// newFont create font format by given run properties for the rich text.
+func newFont(rPr *xlsxRPr) *Font {
+	font := Font{Underline: "none"}
+	font.Bold = rPr.B != nil
+	font.Italic = rPr.I != nil
+	if rPr.U != nil {
+		font.Underline = "single"
+		if rPr.U.Val != nil {
+			font.Underline = *rPr.U.Val
+		}
+	}
+	if rPr.RFont != nil && rPr.RFont.Val != nil {
+		font.Family = *rPr.RFont.Val
+	}
+	if rPr.Sz != nil && rPr.Sz.Val != nil {
+		font.Size = *rPr.Sz.Val
+	}
+	font.Strike = rPr.Strike != nil
+	if rPr.Color != nil {
+		font.Color = strings.TrimPrefix(rPr.Color.RGB, "FF")
+		if rPr.Color.Theme != nil {
+			font.ColorTheme = rPr.Color.Theme
+		}
+		font.ColorIndexed = rPr.Color.Indexed
+		font.ColorTint = rPr.Color.Tint
+	}
+	return &font
 }
 
 // setRichText provides a function to set rich text of a cell.
@@ -1287,6 +1294,9 @@ func (f *File) formattedValue(s int, v string, raw bool) string {
 		return v
 	}
 	styleSheet := f.stylesReader()
+	if styleSheet.CellXfs == nil {
+		return v
+	}
 	if s >= len(styleSheet.CellXfs.Xf) {
 		return v
 	}
@@ -1301,7 +1311,7 @@ func (f *File) formattedValue(s int, v string, raw bool) string {
 	if ok := builtInNumFmtFunc[numFmtID]; ok != nil {
 		return ok(v, builtInNumFmt[numFmtID], date1904)
 	}
-	if styleSheet == nil || styleSheet.NumFmts == nil {
+	if styleSheet.NumFmts == nil {
 		return v
 	}
 	for _, xlsxFmt := range styleSheet.NumFmts.NumFmt {
