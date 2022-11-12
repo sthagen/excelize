@@ -177,11 +177,15 @@ func OpenReader(r io.Reader, opts ...Options) (*File, error) {
 	for k, v := range file {
 		f.Pkg.Store(k, v)
 	}
-	f.CalcChain = f.calcChainReader()
+	if f.CalcChain, err = f.calcChainReader(); err != nil {
+		return f, err
+	}
 	f.sheetMap = f.getSheetMap()
-	f.Styles = f.stylesReader()
-	f.Theme = f.themeReader()
-	return f, nil
+	if f.Styles, err = f.stylesReader(); err != nil {
+		return f, err
+	}
+	f.Theme, err = f.themeReader()
+	return f, err
 }
 
 // parseOptions provides a function to parse the optional settings for open
@@ -250,7 +254,6 @@ func (f *File) workSheetReader(sheet string) (ws *xlsxWorksheet, err error) {
 	}
 	if err = f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(f.readBytes(name)))).
 		Decode(ws); err != nil && err != io.EOF {
-		err = newDecodeXMLError(err)
 		return
 	}
 	err = nil
@@ -334,7 +337,7 @@ func checkSheetR0(ws *xlsxWorksheet, sheetData *xlsxSheetData, r0 *xlsxRow) {
 // setRels provides a function to set relationships by given relationship ID,
 // XML path, relationship type, target and target mode.
 func (f *File) setRels(rID, relPath, relType, target, targetMode string) int {
-	rels := f.relsReader(relPath)
+	rels, _ := f.relsReader(relPath)
 	if rels == nil || rID == "" {
 		return f.addRels(relPath, relType, target, targetMode)
 	}
@@ -359,7 +362,7 @@ func (f *File) addRels(relPath, relType, target, targetMode string) int {
 	uniqPart := map[string]string{
 		SourceRelationshipSharedStrings: "/xl/sharedStrings.xml",
 	}
-	rels := f.relsReader(relPath)
+	rels, _ := f.relsReader(relPath)
 	if rels == nil {
 		rels = &xlsxRelationships{}
 	}
@@ -417,7 +420,10 @@ func (f *File) addRels(relPath, relType, target, targetMode string) int {
 //	    </c>
 //	</row>
 func (f *File) UpdateLinkedValue() error {
-	wb := f.workbookReader()
+	wb, err := f.workbookReader()
+	if err != nil {
+		return err
+	}
 	// recalculate formulas
 	wb.CalcPr = nil
 	for _, name := range f.GetSheetList() {
@@ -464,12 +470,15 @@ func (f *File) AddVBAProject(bin string) error {
 	if path.Ext(bin) != ".bin" {
 		return ErrAddVBAProject
 	}
-	wb := f.relsReader(f.getWorkbookRelsPath())
-	wb.Lock()
-	defer wb.Unlock()
+	rels, err := f.relsReader(f.getWorkbookRelsPath())
+	if err != nil {
+		return err
+	}
+	rels.Lock()
+	defer rels.Unlock()
 	var rID int
 	var ok bool
-	for _, rel := range wb.Relationships {
+	for _, rel := range rels.Relationships {
 		if rel.Target == "vbaProject.bin" && rel.Type == SourceRelationshipVBAProject {
 			ok = true
 			continue
@@ -481,7 +490,7 @@ func (f *File) AddVBAProject(bin string) error {
 	}
 	rID++
 	if !ok {
-		wb.Relationships = append(wb.Relationships, xlsxRelationship{
+		rels.Relationships = append(rels.Relationships, xlsxRelationship{
 			ID:     "rId" + strconv.Itoa(rID),
 			Target: "vbaProject.bin",
 			Type:   SourceRelationshipVBAProject,
@@ -494,9 +503,12 @@ func (f *File) AddVBAProject(bin string) error {
 
 // setContentTypePartProjectExtensions provides a function to set the content
 // type for relationship parts and the main document part.
-func (f *File) setContentTypePartProjectExtensions(contentType string) {
+func (f *File) setContentTypePartProjectExtensions(contentType string) error {
 	var ok bool
-	content := f.contentTypesReader()
+	content, err := f.contentTypesReader()
+	if err != nil {
+		return err
+	}
 	content.Lock()
 	defer content.Unlock()
 	for _, v := range content.Defaults {
@@ -515,4 +527,5 @@ func (f *File) setContentTypePartProjectExtensions(contentType string) {
 			ContentType: ContentTypeVBA,
 		})
 	}
+	return err
 }
