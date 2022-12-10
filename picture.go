@@ -38,7 +38,8 @@ func parsePictureOptions(opts string) (*pictureOptions, error) {
 
 // AddPicture provides the method to add picture in a sheet by given picture
 // format set (such as offset, scale, aspect ratio setting and print settings)
-// and file path. This function is concurrency safe. For example:
+// and file path, supported image types: EMF, EMZ, GIF, JPEG, JPG, PNG, SVG,
+// TIF, TIFF, WMF, and WMZ. This function is concurrency safe. For example:
 //
 //	package main
 //
@@ -121,7 +122,9 @@ func (f *File) AddPicture(sheet, cell, picture, format string) error {
 
 // AddPictureFromBytes provides the method to add picture in a sheet by given
 // picture format set (such as offset, scale, aspect ratio setting and print
-// settings), file base name, extension name and file bytes. For example:
+// settings), file base name, extension name and file bytes, supported image
+// types: EMF, EMZ, GIF, JPEG, JPG, PNG, SVG, TIF, TIFF, WMF, and WMZ. For
+// example:
 //
 //	package main
 //
@@ -250,20 +253,24 @@ func (f *File) addSheetPicture(sheet string, rID int) error {
 
 // countDrawings provides a function to get drawing files count storage in the
 // folder xl/drawings.
-func (f *File) countDrawings() (count int) {
+func (f *File) countDrawings() int {
+	var c1, c2 int
 	f.Pkg.Range(func(k, v interface{}) bool {
 		if strings.Contains(k.(string), "xl/drawings/drawing") {
-			count++
+			c1++
 		}
 		return true
 	})
 	f.Drawings.Range(func(rel, value interface{}) bool {
 		if strings.Contains(rel.(string), "xl/drawings/drawing") {
-			count++
+			c2++
 		}
 		return true
 	})
-	return
+	if c1 < c2 {
+		return c2
+	}
+	return c1
 }
 
 // addDrawingPicture provides a function to add picture by given sheet,
