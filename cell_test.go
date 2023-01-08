@@ -2,6 +2,7 @@ package excelize
 
 import (
 	"fmt"
+	_ "image/jpeg"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,8 +11,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	_ "image/jpeg"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -38,13 +37,20 @@ func TestConcurrency(t *testing.T) {
 				uint64(1<<32 - 1), true, complex64(5 + 10i),
 			}))
 			// Concurrency create style
-			style, err := f.NewStyle(`{"font":{"color":"#1265BE","underline":"single"}}`)
+			style, err := f.NewStyle(&Style{Font: &Font{Color: "#1265BE", Underline: "single"}})
 			assert.NoError(t, err)
 			// Concurrency set cell style
 			assert.NoError(t, f.SetCellStyle("Sheet1", "A3", "A3", style))
 			// Concurrency add picture
 			assert.NoError(t, f.AddPicture("Sheet1", "F21", filepath.Join("test", "images", "excel.jpg"),
-				`{"x_offset": 10, "y_offset": 10, "hyperlink": "https://github.com/xuri/excelize", "hyperlink_type": "External", "positioning": "oneCell"}`))
+				&GraphicOptions{
+					OffsetX:       10,
+					OffsetY:       10,
+					Hyperlink:     "https://github.com/xuri/excelize",
+					HyperlinkType: "External",
+					Positioning:   "oneCell",
+				},
+			))
 			// Concurrency get cell picture
 			name, raw, err := f.GetPicture("Sheet1", "A1")
 			assert.Equal(t, "", name)
@@ -469,11 +475,20 @@ func TestGetCellFormula(t *testing.T) {
 
 func ExampleFile_SetCellFloat() {
 	f := NewFile()
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
 	x := 3.14159265
 	if err := f.SetCellFloat("Sheet1", "A1", x, 2, 64); err != nil {
 		fmt.Println(err)
 	}
-	val, _ := f.GetCellValue("Sheet1", "A1")
+	val, err := f.GetCellValue("Sheet1", "A1")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	fmt.Println(val)
 	// Output: 3.14
 }
@@ -557,7 +572,7 @@ func TestSetCellFormula(t *testing.T) {
 	for idx, row := range [][]interface{}{{"A", "B", "C"}, {1, 2}} {
 		assert.NoError(t, f.SetSheetRow("Sheet1", fmt.Sprintf("A%d", idx+1), &row))
 	}
-	assert.NoError(t, f.AddTable("Sheet1", "A1", "C2", `{"table_name":"Table1","table_style":"TableStyleMedium2"}`))
+	assert.NoError(t, f.AddTable("Sheet1", "A1:C2", &TableOptions{Name: "Table1", StyleName: "TableStyleMedium2"}))
 	formulaType = STCellFormulaTypeDataTable
 	assert.NoError(t, f.SetCellFormula("Sheet1", "C2", "=SUM(Table1[[A]:[B]])", FormulaOpts{Type: &formulaType}))
 	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestSetCellFormula6.xlsx")))
@@ -755,7 +770,13 @@ func TestFormattedValue(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "43528", result)
 
+	// S is too large
 	result, err = f.formattedValue(15, "43528", false)
+	assert.NoError(t, err)
+	assert.Equal(t, "43528", result)
+
+	// S is too small
+	result, err = f.formattedValue(-15, "43528", false)
 	assert.NoError(t, err)
 	assert.Equal(t, "43528", result)
 
@@ -869,7 +890,7 @@ func TestSharedStringsError(t *testing.T) {
 	assert.Equal(t, "1", f.getFromStringItem(1))
 	// Cleanup undelete temporary files
 	assert.NoError(t, os.Remove(tempFile.(string)))
-	// Test reload the file error on set cell value and rich text. The error message was different between macOS and Windows.
+	// Test reload the file error on set cell value and rich text. The error message was different between macOS and Windows
 	err = f.SetCellValue("Sheet1", "A19", "A19")
 	assert.Error(t, err)
 
