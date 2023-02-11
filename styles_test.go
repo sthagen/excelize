@@ -159,12 +159,7 @@ func TestSetConditionalFormat(t *testing.T) {
 		f := NewFile()
 		const sheet = "Sheet1"
 		const rangeRef = "A1:A1"
-
-		err := f.SetConditionalFormat(sheet, rangeRef, testCase.format)
-		if err != nil {
-			t.Fatalf("%s", err)
-		}
-
+		assert.NoError(t, f.SetConditionalFormat(sheet, rangeRef, testCase.format))
 		ws, err := f.workSheetReader(sheet)
 		assert.NoError(t, err)
 		cf := ws.ConditionalFormatting
@@ -173,6 +168,30 @@ func TestSetConditionalFormat(t *testing.T) {
 		assert.Equal(t, rangeRef, cf[0].SQRef, testCase.label)
 		assert.EqualValues(t, testCase.rules, cf[0].CfRule, testCase.label)
 	}
+	// Test creating a conditional format with a solid color data bar style
+	f := NewFile()
+	condFmts := []ConditionalFormatOptions{
+		{Type: "data_bar", BarColor: "#A9D08E", BarSolid: true, Format: 0, Criteria: "=", MinType: "min", MaxType: "max"},
+	}
+	for _, ref := range []string{"A1:A2", "B1:B2"} {
+		assert.NoError(t, f.SetConditionalFormat("Sheet1", ref, condFmts))
+	}
+	f = NewFile()
+	// Test creating a conditional format with existing extension lists
+	ws, ok := f.Sheet.Load("xl/worksheets/sheet1.xml")
+	assert.True(t, ok)
+	ws.(*xlsxWorksheet).ExtLst = &xlsxExtLst{Ext: `
+		<ext uri="{A8765BA9-456A-4dab-B4F3-ACF838C121DE}"><x14:slicerList /></ext>
+		<ext uri="{05C60535-1F16-4fd2-B633-F4F36F0B64E0}"><x14:sparklineGroups /></ext>`}
+	assert.NoError(t, f.SetConditionalFormat("Sheet1", "A1:A2", []ConditionalFormatOptions{{Type: "data_bar", Criteria: "=", MinType: "min", MaxType: "max", BarBorderColor: "#0000FF", BarColor: "#638EC6", BarSolid: true}}))
+	f = NewFile()
+	// Test creating a conditional format with invalid extension list characters
+	ws, ok = f.Sheet.Load("xl/worksheets/sheet1.xml")
+	assert.True(t, ok)
+	ws.(*xlsxWorksheet).ExtLst = &xlsxExtLst{Ext: "<ext><x14:conditionalFormattings></x14:conditionalFormatting></x14:conditionalFormattings></ext>"}
+	assert.EqualError(t, f.SetConditionalFormat("Sheet1", "A1:A2", condFmts), "XML syntax error on line 1: element <conditionalFormattings> closed by </conditionalFormatting>")
+	// Test creating a conditional format with invalid icon set style
+	assert.EqualError(t, f.SetConditionalFormat("Sheet1", "A1:A2", []ConditionalFormatOptions{{Type: "iconSet", IconStyle: "unknown"}}), ErrParameterInvalid.Error())
 }
 
 func TestGetConditionalFormats(t *testing.T) {
@@ -186,8 +205,10 @@ func TestGetConditionalFormats(t *testing.T) {
 		{{Type: "unique", Format: 1, Criteria: "="}},
 		{{Type: "3_color_scale", Criteria: "=", MinType: "num", MidType: "num", MaxType: "num", MinValue: "-10", MidValue: "50", MaxValue: "10", MinColor: "#FF0000", MidColor: "#00FF00", MaxColor: "#0000FF"}},
 		{{Type: "2_color_scale", Criteria: "=", MinType: "num", MaxType: "num", MinColor: "#FF0000", MaxColor: "#0000FF"}},
-		{{Type: "data_bar", Criteria: "=", MinType: "min", MaxType: "max", BarColor: "#638EC6"}},
+		{{Type: "data_bar", Criteria: "=", MinType: "min", MaxType: "max", BarBorderColor: "#0000FF", BarColor: "#638EC6", BarOnly: true, BarSolid: true, StopIfTrue: true}},
+		{{Type: "data_bar", Criteria: "=", MinType: "min", MaxType: "max", BarBorderColor: "#0000FF", BarColor: "#638EC6", BarDirection: "rightToLeft", BarOnly: true, BarSolid: true, StopIfTrue: true}},
 		{{Type: "formula", Format: 1, Criteria: "="}},
+		{{Type: "iconSet", IconStyle: "3Arrows", ReverseIcons: true, IconsOnly: true}},
 	} {
 		f := NewFile()
 		err := f.SetConditionalFormat("Sheet1", "A1:A2", format)
@@ -223,6 +244,13 @@ func TestUnsetConditionalFormat(t *testing.T) {
 
 func TestNewStyle(t *testing.T) {
 	f := NewFile()
+	for i := 0; i < 18; i++ {
+		_, err := f.NewStyle(&Style{
+			Fill: Fill{Type: "gradient", Color: []string{"#FFFFFF", "#4E71BE"}, Shading: i},
+		})
+		assert.NoError(t, err)
+	}
+	f = NewFile()
 	styleID, err := f.NewStyle(&Style{Font: &Font{Bold: true, Italic: true, Family: "Times New Roman", Size: 36, Color: "#777777"}})
 	assert.NoError(t, err)
 	styles, err := f.stylesReader()
@@ -318,6 +346,13 @@ func TestNewStyle(t *testing.T) {
 	f.Pkg.Store(defaultXMLPathStyles, MacintoshCyrillicCharset)
 	_, err = f.NewStyle(&Style{NumFmt: 165})
 	assert.EqualError(t, err, "XML syntax error on line 1: invalid UTF-8")
+
+	// Test create cell styles reach maximum
+	f = NewFile()
+	f.Styles.CellXfs.Xf = make([]xlsxXf, MaxCellStyles)
+	f.Styles.CellXfs.Count = MaxCellStyles
+	_, err = f.NewStyle(&Style{NumFmt: 0})
+	assert.Equal(t, ErrCellStyles, err)
 }
 
 func TestNewConditionalStyle(t *testing.T) {
