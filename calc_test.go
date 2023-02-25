@@ -1697,6 +1697,11 @@ func TestCalcCellValue(t *testing.T) {
 		"=LEFT(\"Original Text\",0)":  "",
 		"=LEFT(\"Original Text\",13)": "Original Text",
 		"=LEFT(\"Original Text\",20)": "Original Text",
+		"=LEFT(\"オリジナルテキスト\")":        "オ",
+		"=LEFT(\"オリジナルテキスト\",2)":      "オリ",
+		"=LEFT(\"オリジナルテキスト\",5)":      "オリジナル",
+		"=LEFT(\"オリジナルテキスト\",7)":      "オリジナルテキ",
+		"=LEFT(\"オリジナルテキスト\",20)":     "オリジナルテキスト",
 		// LEFTB
 		"=LEFTB(\"Original Text\")":    "O",
 		"=LEFTB(\"Original Text\",4)":  "Orig",
@@ -1704,11 +1709,15 @@ func TestCalcCellValue(t *testing.T) {
 		"=LEFTB(\"Original Text\",13)": "Original Text",
 		"=LEFTB(\"Original Text\",20)": "Original Text",
 		// LEN
-		"=LEN(\"\")": "0",
-		"=LEN(D1)":   "5",
+		"=LEN(\"\")":          "0",
+		"=LEN(D1)":            "5",
+		"=LEN(\"テキスト\")":      "4",
+		"=LEN(\"オリジナルテキスト\")": "9",
 		// LENB
-		"=LENB(\"\")": "0",
-		"=LENB(D1)":   "5",
+		"=LENB(\"\")":          "0",
+		"=LENB(D1)":            "5",
+		"=LENB(\"テキスト\")":      "8",
+		"=LENB(\"オリジナルテキスト\")": "18",
 		// LOWER
 		"=LOWER(\"test\")":     "test",
 		"=LOWER(\"TEST\")":     "test",
@@ -1720,6 +1729,8 @@ func TestCalcCellValue(t *testing.T) {
 		"=MID(\"255 years\",3,1)":     "5",
 		"=MID(\"text\",3,6)":          "xt",
 		"=MID(\"text\",6,0)":          "",
+		"=MID(\"オリジナルテキスト\",6,4)":     "テキスト",
+		"=MID(\"オリジナルテキスト\",3,5)":     "ジナルテキ",
 		// MIDB
 		"=MIDB(\"Original Text\",7,1)": "a",
 		"=MIDB(\"Original Text\",4,7)": "ginal T",
@@ -1751,6 +1762,11 @@ func TestCalcCellValue(t *testing.T) {
 		"=RIGHT(\"Original Text\",0)":  "",
 		"=RIGHT(\"Original Text\",13)": "Original Text",
 		"=RIGHT(\"Original Text\",20)": "Original Text",
+		"=RIGHT(\"オリジナルテキスト\")":        "ト",
+		"=RIGHT(\"オリジナルテキスト\",2)":      "スト",
+		"=RIGHT(\"オリジナルテキスト\",4)":      "テキスト",
+		"=RIGHT(\"オリジナルテキスト\",7)":      "ジナルテキスト",
+		"=RIGHT(\"オリジナルテキスト\",20)":     "オリジナルテキスト",
 		// RIGHTB
 		"=RIGHTB(\"Original Text\")":    "t",
 		"=RIGHTB(\"Original Text\",4)":  "Text",
