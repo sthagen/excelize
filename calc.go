@@ -1532,6 +1532,22 @@ func (f *File) cellResolver(ctx *calcContext, sheet, cell string) (formulaArg, e
 		value string
 		err   error
 	)
+	ref := fmt.Sprintf("%s!%s", sheet, cell)
+	if formula, _ := f.GetCellFormula(sheet, cell); len(formula) != 0 {
+		ctx.Lock()
+		if ctx.entry != ref {
+			if ctx.iterations[ref] <= f.options.MaxCalcIterations {
+				ctx.iterations[ref]++
+				ctx.Unlock()
+				arg, _ = f.calcCellValue(ctx, sheet, cell)
+				ctx.iterationsCache[ref] = arg
+				return arg, nil
+			}
+			ctx.Unlock()
+			return ctx.iterationsCache[ref], nil
+		}
+		ctx.Unlock()
+	}
 	if value, err = f.GetCellValue(sheet, cell, Options{RawCellValue: true}); err != nil {
 		return arg, err
 	}
@@ -1547,21 +1563,6 @@ func (f *File) cellResolver(ctx *calcContext, sheet, cell string) (formulaArg, e
 		return arg.ToNumber(), err
 	case CellTypeInlineString, CellTypeSharedString:
 		return arg, err
-	case CellTypeFormula:
-		ref := fmt.Sprintf("%s!%s", sheet, cell)
-		if ctx.entry != ref {
-			ctx.Lock()
-			if ctx.iterations[ref] <= ctx.maxCalcIterations {
-				ctx.iterations[ref]++
-				ctx.Unlock()
-				arg, _ = f.calcCellValue(ctx, sheet, cell)
-				ctx.iterationsCache[ref] = arg
-				return arg, nil
-			}
-			ctx.Unlock()
-			return ctx.iterationsCache[ref], nil
-		}
-		fallthrough
 	default:
 		return newEmptyFormulaArg(), err
 	}
@@ -13489,7 +13490,7 @@ func (fn *formulaFuncs) LENB(argsList *list.List) formulaArg {
 		return newErrorFormulaArg(formulaErrorVALUE, "LENB requires 1 string argument")
 	}
 	bytes := 0
-	for _, r := range []rune(argsList.Front().Value.(formulaArg).String) {
+	for _, r := range argsList.Front().Value.(formulaArg).Value() {
 		b := utf8.RuneLen(r)
 		if b == 1 {
 			bytes++

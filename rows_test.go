@@ -320,7 +320,7 @@ func TestRemoveRow(t *testing.T) {
 		t.FailNow()
 	}
 
-	err = f.AutoFilter(sheet1, "A2:A2", &AutoFilterOptions{Column: "A", Expression: "x != blanks"})
+	err = f.AutoFilter(sheet1, "A2:A2", []AutoFilterOptions{{Column: "A", Expression: "x != blanks"}})
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -990,9 +990,9 @@ func TestCheckRow(t *testing.T) {
 
 func TestSetRowStyle(t *testing.T) {
 	f := NewFile()
-	style1, err := f.NewStyle(&Style{Fill: Fill{Type: "pattern", Color: []string{"#63BE7B"}, Pattern: 1}})
+	style1, err := f.NewStyle(&Style{Fill: Fill{Type: "pattern", Color: []string{"63BE7B"}, Pattern: 1}})
 	assert.NoError(t, err)
-	style2, err := f.NewStyle(&Style{Fill: Fill{Type: "pattern", Color: []string{"#E0EBF5"}, Pattern: 1}})
+	style2, err := f.NewStyle(&Style{Fill: Fill{Type: "pattern", Color: []string{"E0EBF5"}, Pattern: 1}})
 	assert.NoError(t, err)
 	assert.NoError(t, f.SetCellStyle("Sheet1", "B2", "B2", style1))
 	assert.EqualError(t, f.SetRowStyle("Sheet1", 5, -1, style2), newInvalidRowNumberError(-1).Error())

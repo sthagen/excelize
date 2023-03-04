@@ -320,7 +320,7 @@ func TestSetColStyle(t *testing.T) {
 	f := NewFile()
 	assert.NoError(t, f.SetCellValue("Sheet1", "B2", "Hello"))
 
-	styleID, err := f.NewStyle(&Style{Fill: Fill{Type: "pattern", Color: []string{"#94d3a2"}, Pattern: 1}})
+	styleID, err := f.NewStyle(&Style{Fill: Fill{Type: "pattern", Color: []string{"94D3A2"}, Pattern: 1}})
 	assert.NoError(t, err)
 	// Test set column style on not exists worksheet
 	assert.EqualError(t, f.SetColStyle("SheetN", "E", styleID), "sheet SheetN does not exist")
@@ -412,7 +412,7 @@ func TestInsertCols(t *testing.T) {
 	assert.NoError(t, f.SetCellHyperLink(sheet1, "A5", "https://github.com/xuri/excelize", "External"))
 	assert.NoError(t, f.MergeCell(sheet1, "A1", "C3"))
 
-	assert.NoError(t, f.AutoFilter(sheet1, "A2:B2", &AutoFilterOptions{Column: "B", Expression: "x != blanks"}))
+	assert.NoError(t, f.AutoFilter(sheet1, "A2:B2", []AutoFilterOptions{{Column: "B", Expression: "x != blanks"}}))
 	assert.NoError(t, f.InsertCols(sheet1, "A", 1))
 
 	// Test insert column with illegal cell reference
