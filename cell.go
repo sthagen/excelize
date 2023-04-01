@@ -564,7 +564,7 @@ func (c *xlsxC) getValueFrom(f *File, d *xlsxSST, raw bool) (string, error) {
 	case "s":
 		if c.V != "" {
 			xlsxSI := 0
-			xlsxSI, _ = strconv.Atoi(c.V)
+			xlsxSI, _ = strconv.Atoi(strings.TrimSpace(c.V))
 			if _, ok := f.tempFiles.Load(defaultXMLPathSharedStrings); ok {
 				return f.formattedValue(c.S, f.getFromStringItem(xlsxSI), raw)
 			}
@@ -801,12 +801,13 @@ func (f *File) GetCellHyperLink(sheet, cell string) (bool, string, error) {
 	if err != nil {
 		return false, "", err
 	}
-	if cell, err = f.mergeCellsParser(ws, cell); err != nil {
-		return false, "", err
-	}
 	if ws.Hyperlinks != nil {
 		for _, link := range ws.Hyperlinks.Hyperlink {
-			if link.Ref == cell {
+			ok, err := f.checkCellInRangeRef(cell, link.Ref)
+			if err != nil {
+				return false, "", err
+			}
+			if link.Ref == cell || ok {
 				if link.RID != "" {
 					return true, f.getSheetRelationshipsTargetByID(sheet, link.RID), err
 				}
