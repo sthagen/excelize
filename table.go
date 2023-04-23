@@ -12,13 +12,22 @@
 package excelize
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+)
+
+var (
+	expressionFormat = regexp.MustCompile(`"(?:[^"]|"")*"|\S+`)
+	conditionFormat  = regexp.MustCompile(`(or|\|\|)`)
+	blankFormat      = regexp.MustCompile("blanks|nonblanks")
+	matchFormat      = regexp.MustCompile("[*?]")
 )
 
 // parseTableOptions provides a function to parse the format settings of the
@@ -31,7 +40,7 @@ func parseTableOptions(opts *Table) (*Table, error) {
 	if opts.ShowRowStripes == nil {
 		opts.ShowRowStripes = boolPtr(true)
 	}
-	if err = checkTableName(opts.Name); err != nil {
+	if err = checkDefinedName(opts.Name); err != nil {
 		return opts, err
 	}
 	return opts, err
@@ -74,6 +83,23 @@ func (f *File) AddTable(sheet string, table *Table) error {
 	options, err := parseTableOptions(table)
 	if err != nil {
 		return err
+	}
+	var exist bool
+	f.Pkg.Range(func(k, v interface{}) bool {
+		if strings.Contains(k.(string), "xl/tables/table") {
+			var t xlsxTable
+			if err := f.xmlNewDecoder(bytes.NewReader(namespaceStrictToTransitional(v.([]byte)))).
+				Decode(&t); err != nil && err != io.EOF {
+				return true
+			}
+			if exist = t.Name == options.Name; exist {
+				return false
+			}
+		}
+		return true
+	})
+	if exist {
+		return ErrExistsTableName
 	}
 	// Coordinate conversion, convert C1:B3 to 2,0,1,2.
 	coordinates, err := rangeRefToCoordinates(options.Range)
@@ -163,13 +189,13 @@ func (f *File) setTableHeader(sheet string, showHeaderRow bool, x1, y1, x2 int) 
 	return tableColumns, nil
 }
 
-// checkSheetName check whether there are illegal characters in the table name.
-// Verify that the name:
+// checkDefinedName check whether there are illegal characters in the defined
+// name or table name. Verify that the name:
 // 1. Starts with a letter or underscore (_)
 // 2. Doesn't include a space or character that isn't allowed
-func checkTableName(name string) error {
+func checkDefinedName(name string) error {
 	if utf8.RuneCountInString(name) > MaxFieldLength {
-		return ErrTableNameLength
+		return ErrNameLength
 	}
 	for i, c := range name {
 		if string(c) == "_" {
@@ -181,7 +207,7 @@ func checkTableName(name string) error {
 		if i > 0 && unicode.IsDigit(c) {
 			continue
 		}
-		return newInvalidTableNameError(name)
+		return newInvalidNameError(name)
 	}
 	return nil
 }
@@ -381,8 +407,7 @@ func (f *File) autoFilter(sheet, ref string, columns, col int, opts []AutoFilter
 			return fmt.Errorf("incorrect index of column '%s'", opt.Column)
 		}
 		fc := &xlsxFilterColumn{ColID: offset}
-		re := regexp.MustCompile(`"(?:[^"]|"")*"|\S+`)
-		token := re.FindAllString(opt.Expression, -1)
+		token := expressionFormat.FindAllString(opt.Expression, -1)
 		if len(token) != 3 && len(token) != 7 {
 			return fmt.Errorf("incorrect number of tokens in criteria '%s'", opt.Expression)
 		}
@@ -465,8 +490,7 @@ func (f *File) parseFilterExpression(expression string, tokens []string) ([]int,
 		// expressions).
 		conditional := 0
 		c := tokens[3]
-		re, _ := regexp.Match(`(or|\|\|)`, []byte(c))
-		if re {
+		if conditionFormat.Match([]byte(c)) {
 			conditional = 1
 		}
 		expression1, token1, err := f.parseFilterTokens(expression, tokens[:3])
@@ -514,7 +538,7 @@ func (f *File) parseFilterTokens(expression string, tokens []string) ([]int, str
 	}
 	token := tokens[2]
 	// Special handling for Blanks/NonBlanks.
-	re, _ := regexp.Match("blanks|nonblanks", []byte(strings.ToLower(token)))
+	re := blankFormat.Match([]byte(strings.ToLower(token)))
 	if re {
 		// Only allow Equals or NotEqual in this context.
 		if operator != 2 && operator != 5 {
@@ -539,7 +563,7 @@ func (f *File) parseFilterTokens(expression string, tokens []string) ([]int, str
 	}
 	// If the string token contains an Excel match character then change the
 	// operator type to indicate a non "simple" equality.
-	re, _ = regexp.Match("[*?]", []byte(token))
+	re = matchFormat.Match([]byte(token))
 	if operator == 2 && re {
 		operator = 22
 	}
