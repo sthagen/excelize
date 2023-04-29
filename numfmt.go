@@ -961,6 +961,9 @@ func (nf *numberFormat) textHandler() (result string) {
 // getValueSectionType returns its applicable number format expression section
 // based on the given value.
 func (nf *numberFormat) getValueSectionType(value string) (float64, string) {
+	if nf.cellType != CellTypeNumber && nf.cellType != CellTypeDate {
+		return 0, nfp.TokenSectionText
+	}
 	isNum, _, _ := isNumeric(value)
 	if !isNum {
 		return 0, nfp.TokenSectionText

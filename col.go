@@ -215,11 +215,11 @@ func (f *File) Cols(sheet string) (*Cols, error) {
 	if !ok {
 		return nil, ErrSheetNotExist{sheet}
 	}
-	if ws, ok := f.Sheet.Load(name); ok && ws != nil {
-		worksheet := ws.(*xlsxWorksheet)
-		worksheet.Lock()
-		defer worksheet.Unlock()
-		output, _ := xml.Marshal(worksheet)
+	if worksheet, ok := f.Sheet.Load(name); ok && worksheet != nil {
+		ws := worksheet.(*xlsxWorksheet)
+		ws.mu.Lock()
+		defer ws.mu.Unlock()
+		output, _ := xml.Marshal(ws)
 		f.saveFileList(name, f.replaceNameSpaceBytes(name, output))
 	}
 	var colIterator columnXMLIterator
@@ -257,12 +257,15 @@ func (f *File) GetColVisible(sheet, col string) (bool, error) {
 	if err != nil {
 		return true, err
 	}
+	f.mu.Lock()
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {
+		f.mu.Unlock()
 		return false, err
 	}
-	ws.Lock()
-	defer ws.Unlock()
+	f.mu.Unlock()
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
 	if ws.Cols == nil {
 		return true, err
 	}
@@ -295,8 +298,8 @@ func (f *File) SetColVisible(sheet, columns string, visible bool) error {
 	if err != nil {
 		return err
 	}
-	ws.Lock()
-	defer ws.Unlock()
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
 	colData := xlsxCol{
 		Min:         min,
 		Max:         max,
@@ -428,21 +431,25 @@ func (f *File) SetColStyle(sheet, columns string, styleID int) error {
 	if err != nil {
 		return err
 	}
+	f.mu.Lock()
 	s, err := f.stylesReader()
 	if err != nil {
+		f.mu.Unlock()
 		return err
 	}
-	s.Lock()
-	if styleID < 0 || s.CellXfs == nil || len(s.CellXfs.Xf) <= styleID {
-		s.Unlock()
-		return newInvalidStyleID(styleID)
-	}
-	s.Unlock()
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {
+		f.mu.Unlock()
 		return err
 	}
-	ws.Lock()
+	f.mu.Unlock()
+	s.mu.Lock()
+	if styleID < 0 || s.CellXfs == nil || len(s.CellXfs.Xf) <= styleID {
+		s.mu.Unlock()
+		return newInvalidStyleID(styleID)
+	}
+	s.mu.Unlock()
+	ws.mu.Lock()
 	if ws.Cols == nil {
 		ws.Cols = &xlsxCols{}
 	}
@@ -461,7 +468,7 @@ func (f *File) SetColStyle(sheet, columns string, styleID int) error {
 		fc.Width = c.Width
 		return fc
 	})
-	ws.Unlock()
+	ws.mu.Unlock()
 	if rows := len(ws.SheetData.Row); rows > 0 {
 		for col := min; col <= max; col++ {
 			from, _ := CoordinatesToCellName(col, 1)
@@ -484,12 +491,15 @@ func (f *File) SetColWidth(sheet, startCol, endCol string, width float64) error 
 	if width > MaxColumnWidth {
 		return ErrColumnWidth
 	}
+	f.mu.Lock()
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {
+		f.mu.Unlock()
 		return err
 	}
-	ws.Lock()
-	defer ws.Unlock()
+	f.mu.Unlock()
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
 	col := xlsxCol{
 		Min:         min,
 		Max:         max,
@@ -634,8 +644,8 @@ func (f *File) positionObjectPixels(sheet string, col, row, x1, y1, width, heigh
 // sheet name and column number.
 func (f *File) getColWidth(sheet string, col int) int {
 	ws, _ := f.workSheetReader(sheet)
-	ws.Lock()
-	defer ws.Unlock()
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
 	if ws.Cols != nil {
 		var width float64
 		for _, v := range ws.Cols.Col {
@@ -659,12 +669,15 @@ func (f *File) GetColStyle(sheet, col string) (int, error) {
 	if err != nil {
 		return styleID, err
 	}
+	f.mu.Lock()
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {
+		f.mu.Unlock()
 		return styleID, err
 	}
-	ws.Lock()
-	defer ws.Unlock()
+	f.mu.Unlock()
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
 	if ws.Cols != nil {
 		for _, v := range ws.Cols.Col {
 			if v.Min <= colNum && colNum <= v.Max {
@@ -682,12 +695,15 @@ func (f *File) GetColWidth(sheet, col string) (float64, error) {
 	if err != nil {
 		return defaultColWidth, err
 	}
+	f.mu.Lock()
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {
+		f.mu.Unlock()
 		return defaultColWidth, err
 	}
-	ws.Lock()
-	defer ws.Unlock()
+	f.mu.Unlock()
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
 	if ws.Cols != nil {
 		var width float64
 		for _, v := range ws.Cols.Col {
