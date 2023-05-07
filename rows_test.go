@@ -305,7 +305,7 @@ func TestRemoveRow(t *testing.T) {
 		colCount = 10
 		rowCount = 10
 	)
-	fillCells(f, sheet1, colCount, rowCount)
+	assert.NoError(t, fillCells(f, sheet1, colCount, rowCount))
 
 	assert.NoError(t, f.SetCellHyperLink(sheet1, "A5", "https://github.com/xuri/excelize", "External"))
 
@@ -368,7 +368,7 @@ func TestInsertRows(t *testing.T) {
 		colCount = 10
 		rowCount = 10
 	)
-	fillCells(f, sheet1, colCount, rowCount)
+	assert.NoError(t, fillCells(f, sheet1, colCount, rowCount))
 
 	assert.NoError(t, f.SetCellHyperLink(sheet1, "A5", "https://github.com/xuri/excelize", "External"))
 
@@ -1114,9 +1114,18 @@ func TestNumberFormats(t *testing.T) {
 		assert.NoError(t, f.SetCellValue("Sheet1", cell, value))
 		result, err := f.GetCellValue("Sheet1", cell)
 		assert.NoError(t, err)
-		assert.Equal(t, expected, result)
+		assert.Equal(t, expected, result, cell)
 	}
 	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestNumberFormats.xlsx")))
+
+	f = NewFile(Options{ShortDateFmtCode: "yyyy/m/d"})
+	assert.NoError(t, f.SetCellValue("Sheet1", "A1", 43543.503206018519))
+	numFmt14, err := f.NewStyle(&Style{NumFmt: 14})
+	assert.NoError(t, err)
+	assert.NoError(t, f.SetCellStyle("Sheet1", "A1", "A1", numFmt14))
+	result, err := f.GetCellValue("Sheet1", "A1")
+	assert.NoError(t, err)
+	assert.Equal(t, "2019/3/19", result, "A1")
 }
 
 func BenchmarkRows(b *testing.B) {

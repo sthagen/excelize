@@ -1336,6 +1336,15 @@ func (f *File) getCellStringFunc(sheet, cell string, fn func(x *xlsxWorksheet, c
 	return "", nil
 }
 
+// applyBuiltInNumFmt provides a function to returns a value after formatted
+// with built-in number format code, or specified sort date format code.
+func (f *File) applyBuiltInNumFmt(c *xlsxC, fmtCode string, numFmtID int, date1904 bool, cellType CellType) string {
+	if numFmtID == 14 && f.options != nil && f.options.ShortDateFmtCode != "" {
+		fmtCode = f.options.ShortDateFmtCode
+	}
+	return format(c.V, fmtCode, date1904, cellType, f.options)
+}
+
 // formattedValue provides a function to returns a value after formatted. If
 // it is possible to apply a format to the cell value, it will do so, if not
 // then an error will be returned, along with the raw value of the cell.
@@ -1365,15 +1374,15 @@ func (f *File) formattedValue(c *xlsxC, raw bool, cellType CellType) (string, er
 	if wb != nil && wb.WorkbookPr != nil {
 		date1904 = wb.WorkbookPr.Date1904
 	}
-	if ok := builtInNumFmtFunc[numFmtID]; ok != nil {
-		return ok(c.V, builtInNumFmt[numFmtID], date1904, cellType), err
+	if fmtCode, ok := builtInNumFmt[numFmtID]; ok {
+		return f.applyBuiltInNumFmt(c, fmtCode, numFmtID, date1904, cellType), err
 	}
 	if styleSheet.NumFmts == nil {
 		return c.V, err
 	}
 	for _, xlsxFmt := range styleSheet.NumFmts.NumFmt {
 		if xlsxFmt.NumFmtID == numFmtID {
-			return format(c.V, xlsxFmt.FormatCode, date1904, cellType), err
+			return format(c.V, xlsxFmt.FormatCode, date1904, cellType, f.options), err
 		}
 	}
 	return c.V, err
