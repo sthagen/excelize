@@ -1663,8 +1663,12 @@ func TestCalcCellValue(t *testing.T) {
 		"=CODE(\"\")":      "0",
 		// CONCAT
 		"=CONCAT(TRUE(),1,FALSE(),\"0\",INT(2))": "TRUE1FALSE02",
+		"=CONCAT(MUNIT(2))":                      "1001",
+		"=CONCAT(A1:B2)":                         "1425",
 		// CONCATENATE
 		"=CONCATENATE(TRUE(),1,FALSE(),\"0\",INT(2))": "TRUE1FALSE02",
+		"=CONCATENATE(MUNIT(2))":                      "1001",
+		"=CONCATENATE(A1:B2)":                         "1425",
 		// EXACT
 		"=EXACT(1,\"1\")":     "TRUE",
 		"=EXACT(1,1)":         "TRUE",
@@ -3665,9 +3669,11 @@ func TestCalcCellValue(t *testing.T) {
 		"=CODE()":    {"#VALUE!", "CODE requires 1 argument"},
 		"=CODE(1,2)": {"#VALUE!", "CODE requires 1 argument"},
 		// CONCAT
-		"=CONCAT(MUNIT(2))": {"#VALUE!", "CONCAT requires arguments to be strings"},
+		"=CONCAT(NA())":  {"#N/A", "#N/A"},
+		"=CONCAT(1,1/0)": {"#DIV/0!", "#DIV/0!"},
 		// CONCATENATE
-		"=CONCATENATE(MUNIT(2))": {"#VALUE!", "CONCATENATE requires arguments to be strings"},
+		"=CONCATENATE(NA())":  {"#N/A", "#N/A"},
+		"=CONCATENATE(1,1/0)": {"#DIV/0!", "#DIV/0!"},
 		// EXACT
 		"=EXACT()":      {"#VALUE!", "EXACT requires 2 arguments"},
 		"=EXACT(1,2,3)": {"#VALUE!", "EXACT requires 2 arguments"},
@@ -3828,7 +3834,8 @@ func TestCalcCellValue(t *testing.T) {
 		"=MATCH(0,A1:A1,0,0)":   {"#VALUE!", "MATCH requires 1 or 2 arguments"},
 		"=MATCH(0,A1:A1,\"x\")": {"#VALUE!", "MATCH requires numeric match_type argument"},
 		"=MATCH(0,A1)":          {"#N/A", "MATCH arguments lookup_array should be one-dimensional array"},
-		"=MATCH(0,A1:B1)":       {"#N/A", "MATCH arguments lookup_array should be one-dimensional array"},
+		"=MATCH(0,A1:B2)":       {"#N/A", "MATCH arguments lookup_array should be one-dimensional array"},
+		"=MATCH(0,A1:B1)":       {"#N/A", "#N/A"},
 		// TRANSPOSE
 		"=TRANSPOSE()": {"#VALUE!", "TRANSPOSE requires 1 argument"},
 		// HYPERLINK
@@ -5131,10 +5138,14 @@ func TestCalcSUMIFSAndAVERAGEIFS(t *testing.T) {
 	}
 	f := prepareCalcData(cellData)
 	formulaList := map[string]string{
-		"=AVERAGEIFS(D2:D13,A2:A13,1,B2:B13,\"North\")":     "174000",
-		"=AVERAGEIFS(D2:D13,A2:A13,\">2\",C2:C13,\"Jeff\")": "285500",
-		"=SUMIFS(D2:D13,A2:A13,1,B2:B13,\"North\")":         "348000",
-		"=SUMIFS(D2:D13,A2:A13,\">2\",C2:C13,\"Jeff\")":     "571000",
+		"=AVERAGEIFS(D2:D13,A2:A13,1,B2:B13,\"North\")":                "174000",
+		"=AVERAGEIFS(D2:D13,A2:A13,\">2\",C2:C13,\"Jeff\")":            "285500",
+		"=SUMIFS(D2:D13,A2:A13,1,B2:B13,\"North\")":                    "348000",
+		"=SUMIFS(D2:D13,A2:A13,\">2\",C2:C13,\"Jeff\")":                "571000",
+		"=SUMIFS(D2:D13,A2:A13,1,D2:D13,125000)":                       "125000",
+		"=SUMIFS(D2:D13,A2:A13,1,D2:D13,\">100000\",C2:C13,\"Chris\")": "125000",
+		"=SUMIFS(D2:D13,A2:A13,1,D2:D13,\"<40000\",C2:C13,\"Chris\")":  "0",
+		"=SUMIFS(D2:D13,A2:A13,1,A2:A13,2)":                            "0",
 	}
 	for formula, expected := range formulaList {
 		assert.NoError(t, f.SetCellFormula("Sheet1", "E1", formula))
@@ -5147,6 +5158,7 @@ func TestCalcSUMIFSAndAVERAGEIFS(t *testing.T) {
 		"=AVERAGEIFS(H1,\"\")":                           {"#VALUE!", "AVERAGEIFS requires at least 3 arguments"},
 		"=AVERAGEIFS(H1,\"\",TRUE,1)":                    {"#N/A", "#N/A"},
 		"=AVERAGEIFS(H1,\"\",TRUE)":                      {"#DIV/0!", "AVERAGEIF divide by zero"},
+		"=AVERAGEIFS(D2:D13,A2:A13,1,A2:A13,2)":          {"#DIV/0!", "AVERAGEIF divide by zero"},
 		"=SUMIFS()":                                      {"#VALUE!", "SUMIFS requires at least 3 arguments"},
 		"=SUMIFS(D2:D13,A2:A13,1,B2:B13)":                {"#N/A", "#N/A"},
 		"=SUMIFS(D20:D23,A2:A13,\">2\",C2:C13,\"Jeff\")": {"#VALUE!", "#VALUE!"},
