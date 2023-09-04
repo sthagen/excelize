@@ -251,11 +251,6 @@ type xlsxDxfs struct {
 // xlsxDxf directly maps the dxf element. A single dxf record, expressing
 // incremental formatting to be applied.
 type xlsxDxf struct {
-	Dxf string `xml:",innerxml"`
-}
-
-// dxf directly maps the dxf element.
-type dxf struct {
 	Font       *xlsxFont       `xml:"font"`
 	NumFmt     *xlsxNumFmt     `xml:"numFmt"`
 	Fill       *xlsxFill       `xml:"fill"`
@@ -305,12 +300,19 @@ type xlsxNumFmt struct {
 	FormatCode16 string `xml:"http://schemas.microsoft.com/office/spreadsheetml/2015/02/main formatCode16,attr,omitempty"`
 }
 
+// xlsxIndexedColors directly maps the single ARGB entry for the corresponding
+// color index.
+type xlsxIndexedColors struct {
+	RgbColor []xlsxColor `xml:"rgbColor"`
+}
+
 // xlsxStyleColors directly maps the colors' element. Color information
-// associated with this stylesheet. This collection is written whenever the
+// associated with this style sheet. This collection is written whenever the
 // legacy color palette has been modified (backwards compatibility settings) or
 // a custom color has been selected while using this workbook.
 type xlsxStyleColors struct {
-	Color string `xml:",innerxml"`
+	IndexedColors xlsxIndexedColors `xml:"indexedColors"`
+	MruColors     xlsxInnerXML      `xml:"mruColors"`
 }
 
 // Alignment directly maps the alignment settings of the cells.
