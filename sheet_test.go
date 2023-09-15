@@ -266,7 +266,7 @@ func TestSetHeaderFooter(t *testing.T) {
 func TestDefinedName(t *testing.T) {
 	f := NewFile()
 	assert.NoError(t, f.SetDefinedName(&DefinedName{
-		Name:     "Amount",
+		Name:     "Amount.",
 		RefersTo: "Sheet1!$A$2:$D$5",
 		Comment:  "defined name comment",
 		Scope:    "Sheet1",
@@ -275,6 +275,16 @@ func TestDefinedName(t *testing.T) {
 		Name:     "Amount",
 		RefersTo: "Sheet1!$A$2:$D$5",
 		Comment:  "defined name comment",
+	}))
+	assert.NoError(t, f.SetDefinedName(&DefinedName{
+		Name:     builtInDefinedNames[0],
+		RefersTo: "Sheet1!$A$1:$Z$100",
+		Scope:    "Sheet1",
+	}))
+	assert.NoError(t, f.SetDefinedName(&DefinedName{
+		Name:     builtInDefinedNames[1],
+		RefersTo: "Sheet1!$A:$A,Sheet1!$1:$1",
+		Scope:    "Sheet1",
 	}))
 	assert.EqualError(t, f.SetDefinedName(&DefinedName{
 		Name:     "Amount",
@@ -297,7 +307,7 @@ func TestDefinedName(t *testing.T) {
 		Name: "Amount",
 	}))
 	assert.Exactly(t, "Sheet1!$A$2:$D$5", f.GetDefinedName()[0].RefersTo)
-	assert.Len(t, f.GetDefinedName(), 1)
+	assert.Len(t, f.GetDefinedName(), 3)
 	assert.NoError(t, f.SaveAs(filepath.Join("test", "TestDefinedName.xlsx")))
 	// Test set defined name with unsupported charset workbook
 	f.WorkBook = nil
