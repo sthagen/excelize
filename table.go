@@ -150,10 +150,11 @@ func (f *File) GetTables(sheet string) ([]Table, error) {
 				return tables, err
 			}
 			table := Table{
-				rID:   tbl.RID,
-				tID:   t.ID,
-				Range: t.Ref,
-				Name:  t.Name,
+				rID:      tbl.RID,
+				tID:      t.ID,
+				tableXML: tableXML,
+				Range:    t.Ref,
+				Name:     t.Name,
 			}
 			if t.TableStyleInfo != nil {
 				table.StyleName = t.TableStyleInfo.Name
@@ -186,24 +187,14 @@ func (f *File) DeleteTable(name string) error {
 			for i, tbl := range ws.TableParts.TableParts {
 				if tbl.RID == table.rID {
 					ws.TableParts.TableParts = append(ws.TableParts.TableParts[:i], ws.TableParts.TableParts[i+1:]...)
+					f.Pkg.Delete(table.tableXML)
+					_ = f.removeContentTypesPart(ContentTypeSpreadSheetMLTable, "/"+table.tableXML)
 					f.deleteSheetRelationships(sheet, tbl.RID)
 					break
 				}
 			}
 			if ws.TableParts.Count = len(ws.TableParts.TableParts); ws.TableParts.Count == 0 {
 				ws.TableParts = nil
-			}
-			// Delete cell value in the table header
-			coordinates, err := rangeRefToCoordinates(table.Range)
-			if err != nil {
-				return err
-			}
-			_ = sortCoordinates(coordinates)
-			for col := coordinates[0]; col <= coordinates[2]; col++ {
-				for row := coordinates[1]; row < coordinates[1]+1; row++ {
-					cell, _ := CoordinatesToCellName(col, row)
-					err = f.SetCellValue(sheet, cell, nil)
-				}
 			}
 			return err
 		}
