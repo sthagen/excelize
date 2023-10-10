@@ -231,7 +231,18 @@ func (f *File) AddPictureFromBytes(sheet, cell string, pic *Picture) error {
 	drawingID, drawingXML = f.prepareDrawing(ws, drawingID, sheet, drawingXML)
 	drawingRels := "xl/drawings/_rels/drawing" + strconv.Itoa(drawingID) + ".xml.rels"
 	mediaStr := ".." + strings.TrimPrefix(f.addMedia(pic.File, ext), "xl")
-	drawingRID := f.addRels(drawingRels, SourceRelationshipImage, mediaStr, hyperlinkType)
+	var drawingRID int
+	if rels, _ := f.relsReader(drawingRels); rels != nil {
+		for _, rel := range rels.Relationships {
+			if rel.Type == SourceRelationshipImage && rel.Target == mediaStr {
+				drawingRID, _ = strconv.Atoi(strings.TrimPrefix(rel.ID, "rId"))
+				break
+			}
+		}
+	}
+	if drawingRID == 0 {
+		drawingRID = f.addRels(drawingRels, SourceRelationshipImage, mediaStr, hyperlinkType)
+	}
 	// Add picture with hyperlink.
 	if options.Hyperlink != "" && options.HyperlinkType != "" {
 		if options.HyperlinkType == "External" {
@@ -468,8 +479,7 @@ func (f *File) GetPictures(sheet, cell string) ([]Picture, error) {
 }
 
 // DeletePicture provides a function to delete all pictures in a cell by given
-// worksheet name and cell reference. Note that the image file won't be deleted
-// from the document currently.
+// worksheet name and cell reference.
 func (f *File) DeletePicture(sheet, cell string) error {
 	col, row, err := CellNameToCoordinates(cell)
 	if err != nil {
@@ -485,7 +495,38 @@ func (f *File) DeletePicture(sheet, cell string) error {
 		return err
 	}
 	drawingXML := strings.ReplaceAll(f.getSheetRelationshipsTargetByID(sheet, ws.Drawing.RID), "..", "xl")
-	return f.deleteDrawing(col, row, drawingXML, "Pic")
+	drawingRels := "xl/drawings/_rels/" + filepath.Base(drawingXML) + ".rels"
+	rID, err := f.deleteDrawing(col, row, drawingXML, "Pic")
+	if err != nil {
+		return err
+	}
+	rels := f.getDrawingRelationships(drawingRels, rID)
+	if rels == nil {
+		return err
+	}
+	var used bool
+	checkPicRef := func(k, v interface{}) bool {
+		if strings.Contains(k.(string), "xl/drawings/_rels/drawing") {
+			r, err := f.relsReader(k.(string))
+			if err != nil {
+				return true
+			}
+			for _, rel := range r.Relationships {
+				if rel.ID != rels.ID && rel.Type == SourceRelationshipImage &&
+					filepath.Base(rel.Target) == filepath.Base(rels.Target) {
+					used = true
+				}
+			}
+		}
+		return true
+	}
+	f.Relationships.Range(checkPicRef)
+	f.Pkg.Range(checkPicRef)
+	if !used {
+		f.Pkg.Delete(strings.Replace(rels.Target, "../", "xl/", -1))
+	}
+	f.deleteDrawingRels(drawingRels, rID)
+	return err
 }
 
 // getPicture provides a function to get picture base name and raw content
