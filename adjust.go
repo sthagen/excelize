@@ -30,7 +30,13 @@ const (
 )
 
 // adjustHelperFunc defines functions to adjust helper.
-var adjustHelperFunc = [7]func(*File, *xlsxWorksheet, string, adjustDirection, int, int, int) error{
+var adjustHelperFunc = [9]func(*File, *xlsxWorksheet, string, adjustDirection, int, int, int) error{
+	func(f *File, ws *xlsxWorksheet, sheet string, dir adjustDirection, num, offset, sheetID int) error {
+		return f.adjustConditionalFormats(ws, sheet, dir, num, offset, sheetID)
+	},
+	func(f *File, ws *xlsxWorksheet, sheet string, dir adjustDirection, num, offset, sheetID int) error {
+		return f.adjustDataValidations(ws, sheet, dir, num, offset, sheetID)
+	},
 	func(f *File, ws *xlsxWorksheet, sheet string, dir adjustDirection, num, offset, sheetID int) error {
 		return f.adjustDefinedNames(ws, sheet, dir, num, offset, sheetID)
 	},
@@ -63,7 +69,7 @@ var adjustHelperFunc = [7]func(*File, *xlsxWorksheet, string, adjustDirection, i
 // row: Index number of the row we're inserting/deleting before
 // offset: Number of rows/column to insert/delete negative values indicate deletion
 //
-// TODO: adjustComments, adjustDataValidations, adjustPageBreaks, adjustProtectedCells
+// TODO: adjustComments, adjustPageBreaks, adjustProtectedCells
 func (f *File) adjustHelper(sheet string, dir adjustDirection, num, offset int) error {
 	ws, err := f.workSheetReader(sheet)
 	if err != nil {
@@ -231,15 +237,19 @@ func (f *File) adjustSingleRowFormulas(sheet, sheetN string, r *xlsxRow, num, of
 }
 
 // adjustCellRef provides a function to adjust cell reference.
-func (f *File) adjustCellRef(ref string, dir adjustDirection, num, offset int) (string, error) {
+func (f *File) adjustCellRef(ref string, dir adjustDirection, num, offset int) (string, bool, error) {
 	if !strings.Contains(ref, ":") {
 		ref += ":" + ref
 	}
+	var delete bool
 	coordinates, err := rangeRefToCoordinates(ref)
 	if err != nil {
-		return ref, err
+		return ref, delete, err
 	}
 	if dir == columns {
+		if offset < 0 && coordinates[0] == coordinates[2] {
+			delete = true
+		}
 		if coordinates[0] >= num {
 			coordinates[0] += offset
 		}
@@ -247,6 +257,9 @@ func (f *File) adjustCellRef(ref string, dir adjustDirection, num, offset int) (
 			coordinates[2] += offset
 		}
 	} else {
+		if offset < 0 && coordinates[1] == coordinates[3] {
+			delete = true
+		}
 		if coordinates[1] >= num {
 			coordinates[1] += offset
 		}
@@ -254,7 +267,8 @@ func (f *File) adjustCellRef(ref string, dir adjustDirection, num, offset int) (
 			coordinates[3] += offset
 		}
 	}
-	return f.coordinatesToRangeRef(coordinates)
+	ref, err = f.coordinatesToRangeRef(coordinates)
+	return ref, delete, err
 }
 
 // adjustFormula provides a function to adjust formula reference and shared
@@ -265,7 +279,7 @@ func (f *File) adjustFormula(sheet, sheetN string, formula *xlsxF, dir adjustDir
 	}
 	var err error
 	if formula.Ref != "" && sheet == sheetN {
-		if formula.Ref, err = f.adjustCellRef(formula.Ref, dir, num, offset); err != nil {
+		if formula.Ref, _, err = f.adjustCellRef(formula.Ref, dir, num, offset); err != nil {
 			return err
 		}
 		if si && formula.Si != nil {
@@ -358,7 +372,10 @@ func (f *File) adjustFormulaOperand(sheet, sheetN string, keepRelative bool, tok
 		sheetName, cell = tokens[0], tokens[1]
 		operand = escapeSheetName(sheetName) + "!"
 	}
-	if sheet != sheetN && sheet != sheetName {
+	if sheetName == "" {
+		sheetName = sheetN
+	}
+	if sheet != sheetName {
 		return operand + cell, err
 	}
 	for _, r := range cell {
@@ -765,6 +782,83 @@ func (f *File) adjustVolatileDeps(ws *xlsxWorksheet, sheet string, dir adjustDir
 					}
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// adjustConditionalFormats updates the cell reference of the worksheet
+// conditional formatting when inserting or deleting rows or columns.
+func (f *File) adjustConditionalFormats(ws *xlsxWorksheet, sheet string, dir adjustDirection, num, offset, sheetID int) error {
+	for i := 0; i < len(ws.ConditionalFormatting); i++ {
+		cf := ws.ConditionalFormatting[i]
+		if cf == nil {
+			continue
+		}
+		ref, del, err := f.adjustCellRef(cf.SQRef, dir, num, offset)
+		if err != nil {
+			return err
+		}
+		if del {
+			ws.ConditionalFormatting = append(ws.ConditionalFormatting[:i],
+				ws.ConditionalFormatting[i+1:]...)
+			i--
+			continue
+		}
+		ws.ConditionalFormatting[i].SQRef = ref
+	}
+	return nil
+}
+
+// adjustDataValidations updates the range of data validations for the worksheet
+// when inserting or deleting rows or columns.
+func (f *File) adjustDataValidations(ws *xlsxWorksheet, sheet string, dir adjustDirection, num, offset, sheetID int) error {
+	for _, sheetN := range f.GetSheetList() {
+		worksheet, err := f.workSheetReader(sheetN)
+		if err != nil {
+			if err.Error() == newNotWorksheetError(sheetN).Error() {
+				continue
+			}
+			return err
+		}
+		if worksheet.DataValidations == nil {
+			return nil
+		}
+		for i := 0; i < len(worksheet.DataValidations.DataValidation); i++ {
+			dv := worksheet.DataValidations.DataValidation[i]
+			if dv == nil {
+				continue
+			}
+			if sheet == sheetN {
+				ref, del, err := f.adjustCellRef(dv.Sqref, dir, num, offset)
+				if err != nil {
+					return err
+				}
+				if del {
+					worksheet.DataValidations.DataValidation = append(worksheet.DataValidations.DataValidation[:i],
+						worksheet.DataValidations.DataValidation[i+1:]...)
+					i--
+					continue
+				}
+				worksheet.DataValidations.DataValidation[i].Sqref = ref
+			}
+			if worksheet.DataValidations.DataValidation[i].Formula1 != nil {
+				formula := unescapeDataValidationFormula(worksheet.DataValidations.DataValidation[i].Formula1.Content)
+				if formula, err = f.adjustFormulaRef(sheet, sheetN, formula, false, dir, num, offset); err != nil {
+					return err
+				}
+				worksheet.DataValidations.DataValidation[i].Formula1 = &xlsxInnerXML{Content: formulaEscaper.Replace(formula)}
+			}
+			if worksheet.DataValidations.DataValidation[i].Formula2 != nil {
+				formula := unescapeDataValidationFormula(worksheet.DataValidations.DataValidation[i].Formula2.Content)
+				if formula, err = f.adjustFormulaRef(sheet, sheetN, formula, false, dir, num, offset); err != nil {
+					return err
+				}
+				worksheet.DataValidations.DataValidation[i].Formula2 = &xlsxInnerXML{Content: formulaEscaper.Replace(formula)}
+			}
+		}
+		if worksheet.DataValidations.Count = len(worksheet.DataValidations.DataValidation); worksheet.DataValidations.Count == 0 {
+			worksheet.DataValidations = nil
 		}
 	}
 	return nil
