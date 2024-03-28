@@ -23,6 +23,17 @@ import (
 	"strings"
 )
 
+// PictureInsertType defines the type of the picture has been inserted into the
+// worksheet.
+type PictureInsertType int
+
+// Insert picture types.
+const (
+	PictureInsertTypePlaceOverCells PictureInsertType = iota
+	PictureInsertTypePlaceInCell
+	PictureInsertTypeDISPIMG
+)
+
 // parseGraphicOptions provides a function to parse the format settings of
 // the picture with default value.
 func parseGraphicOptions(opts *GraphicOptions) *GraphicOptions {
@@ -52,7 +63,10 @@ func parseGraphicOptions(opts *GraphicOptions) *GraphicOptions {
 // AddPicture provides the method to add picture in a sheet by given picture
 // format set (such as offset, scale, aspect ratio setting and print settings)
 // and file path, supported image types: BMP, EMF, EMZ, GIF, JPEG, JPG, PNG,
-// SVG, TIF, TIFF, WMF, and WMZ. This function is concurrency safe. For example:
+// SVG, TIF, TIFF, WMF, and WMZ. This function is concurrency-safe. Note that
+// this function only supports adding pictures placed over the cells currently,
+// and doesn't support adding pictures placed in cells or creating the Kingsoft
+// WPS Office embedded image cells. For example:
 //
 //	package main
 //
@@ -167,8 +181,10 @@ func (f *File) AddPicture(sheet, cell, name string, opts *GraphicOptions) error 
 // AddPictureFromBytes provides the method to add picture in a sheet by given
 // picture format set (such as offset, scale, aspect ratio setting and print
 // settings), file base name, extension name and file bytes, supported image
-// types: EMF, EMZ, GIF, JPEG, JPG, PNG, SVG, TIF, TIFF, WMF, and WMZ. For
-// example:
+// types: EMF, EMZ, GIF, JPEG, JPG, PNG, SVG, TIF, TIFF, WMF, and WMZ. Note that
+// this function only supports adding pictures placed over the cells currently,
+// and doesn't support adding pictures placed in cells or creating the Kingsoft
+// WPS Office embedded image cells.For example:
 //
 //	package main
 //
@@ -210,6 +226,9 @@ func (f *File) AddPictureFromBytes(sheet, cell string, pic *Picture) error {
 	ext, ok := supportedImageTypes[strings.ToLower(pic.Extension)]
 	if !ok {
 		return ErrImgExt
+	}
+	if pic.InsertType != PictureInsertTypePlaceOverCells {
+		return ErrParameterInvalid
 	}
 	options := parseGraphicOptions(pic.Format)
 	img, _, err := image.DecodeConfig(bytes.NewReader(pic.File))
@@ -431,7 +450,8 @@ func (f *File) addMedia(file []byte, ext string) string {
 // GetPictures provides a function to get picture meta info and raw content
 // embed in spreadsheet by given worksheet and cell name. This function
 // returns the image contents as []byte data types. This function is
-// concurrency safe. For example:
+// concurrency safe. Note that, this function doesn't support getting cell image
+// inserted by IMAGE formula function currently. For example:
 //
 //	f, err := excelize.OpenFile("Book1.xlsx")
 //	if err != nil {
@@ -487,7 +507,8 @@ func (f *File) GetPictures(sheet, cell string) ([]Picture, error) {
 }
 
 // GetPictureCells returns all picture cell references in a worksheet by a
-// specific worksheet name.
+// specific worksheet name. Note that, this function doesn't support getting
+// cell image inserted by IMAGE formula function currently.
 func (f *File) GetPictureCells(sheet string) ([]string, error) {
 	f.mu.Lock()
 	ws, err := f.workSheetReader(sheet)
@@ -577,7 +598,7 @@ func (f *File) getPicture(row, col int, drawingXML, drawingRelationships string)
 	cond := func(from *xlsxFrom) bool { return from.Col == col && from.Row == row }
 	cond2 := func(from *decodeFrom) bool { return from.Col == col && from.Row == row }
 	cb := func(a *xdrCellAnchor, r *xlsxRelationship) {
-		pic := Picture{Extension: filepath.Ext(r.Target), Format: &GraphicOptions{}}
+		pic := Picture{Extension: filepath.Ext(r.Target), Format: &GraphicOptions{}, InsertType: PictureInsertTypePlaceOverCells}
 		if buffer, _ := f.Pkg.Load(strings.ReplaceAll(r.Target, "..", "xl")); buffer != nil {
 			pic.File = buffer.([]byte)
 			pic.Format.AltText = a.Pic.NvPicPr.CNvPr.Descr
@@ -585,7 +606,7 @@ func (f *File) getPicture(row, col int, drawingXML, drawingRelationships string)
 		}
 	}
 	cb2 := func(a *decodeCellAnchor, r *xlsxRelationship) {
-		pic := Picture{Extension: filepath.Ext(r.Target), Format: &GraphicOptions{}}
+		pic := Picture{Extension: filepath.Ext(r.Target), Format: &GraphicOptions{}, InsertType: PictureInsertTypePlaceOverCells}
 		if buffer, _ := f.Pkg.Load(strings.ReplaceAll(r.Target, "..", "xl")); buffer != nil {
 			pic.File = buffer.([]byte)
 			pic.Format.AltText = a.Pic.NvPicPr.CNvPr.Descr
@@ -771,7 +792,7 @@ func (f *File) cellImagesReader() (*decodeCellImages, error) {
 	return f.DecodeCellImages, nil
 }
 
-// getImageCells returns all the Microsoft 365 cell images and the Kingsoft WPS
+// getImageCells returns all the cell images and the Kingsoft WPS
 // Office embedded image cells reference by given worksheet name.
 func (f *File) getImageCells(sheet string) ([]string, error) {
 	var (
@@ -804,7 +825,29 @@ func (f *File) getImageCells(sheet string) ([]string, error) {
 	return cells, err
 }
 
-// getImageCellRel returns the Microsoft 365 cell image relationship.
+// getImageCellRichValueIdx returns index of the cell image rich value by given
+// cell value meta index and meta blocks.
+func (f *File) getImageCellRichValueIdx(vm uint, blocks *xlsxMetadataBlocks) (int, error) {
+	richValueIdx := blocks.Bk[vm-1].Rc[0].V
+	richValue, err := f.richValueReader()
+	if err != nil {
+		return -1, err
+	}
+	if richValueIdx >= len(richValue.Rv) {
+		return -1, err
+	}
+	rv := richValue.Rv[richValueIdx].V
+	if len(rv) != 2 || rv[1] != "5" {
+		return -1, err
+	}
+	richValueRelIdx, err := strconv.Atoi(rv[0])
+	if err != nil {
+		return -1, err
+	}
+	return richValueRelIdx, err
+}
+
+// getImageCellRel returns the cell image relationship.
 func (f *File) getImageCellRel(c *xlsxC) (*xlsxRelationship, error) {
 	var r *xlsxRelationship
 	if c.Vm == nil || c.V != formulaErrorVALUE {
@@ -818,21 +861,25 @@ func (f *File) getImageCellRel(c *xlsxC) (*xlsxRelationship, error) {
 	if vmd == nil || int(*c.Vm) > len(vmd.Bk) || len(vmd.Bk[*c.Vm-1].Rc) == 0 {
 		return r, err
 	}
+	richValueRelIdx, err := f.getImageCellRichValueIdx(*c.Vm, vmd)
+	if err != nil || richValueRelIdx == -1 {
+		return r, err
+	}
 	richValueRel, err := f.richValueRelReader()
 	if err != nil {
 		return r, err
 	}
-	if vmd.Bk[*c.Vm-1].Rc[0].V >= len(richValueRel.Rels) {
+	if richValueRelIdx >= len(richValueRel.Rels) {
 		return r, err
 	}
-	rID := richValueRel.Rels[vmd.Bk[*c.Vm-1].Rc[0].V].ID
+	rID := richValueRel.Rels[richValueRelIdx].ID
 	if r = f.getRichDataRichValueRelRelationships(rID); r != nil && r.Type != SourceRelationshipImage {
 		return nil, err
 	}
 	return r, err
 }
 
-// getCellImages provides a function to get the Microsoft 365 cell images and
+// getCellImages provides a function to get the cell images and
 // the Kingsoft WPS Office embedded cell images by given worksheet name and cell
 // reference.
 func (f *File) getCellImages(sheet, cell string) ([]Picture, error) {
@@ -845,7 +892,7 @@ func (f *File) getCellImages(sheet, cell string) ([]Picture, error) {
 		if err != nil || r == nil {
 			return "", true, err
 		}
-		pic := Picture{Extension: filepath.Ext(r.Target), Format: &GraphicOptions{}}
+		pic := Picture{Extension: filepath.Ext(r.Target), Format: &GraphicOptions{}, InsertType: PictureInsertTypePlaceInCell}
 		if buffer, _ := f.Pkg.Load(strings.TrimPrefix(strings.ReplaceAll(r.Target, "..", "xl"), "/")); buffer != nil {
 			pic.File = buffer.([]byte)
 			pics = append(pics, pic)
@@ -882,7 +929,7 @@ func (f *File) getDispImages(sheet, cell string) ([]Picture, error) {
 		if cellImg.Pic.NvPicPr.CNvPr.Name == imgID {
 			for _, r := range rels.Relationships {
 				if r.ID == cellImg.Pic.BlipFill.Blip.Embed {
-					pic := Picture{Extension: filepath.Ext(r.Target), Format: &GraphicOptions{}}
+					pic := Picture{Extension: filepath.Ext(r.Target), Format: &GraphicOptions{}, InsertType: PictureInsertTypeDISPIMG}
 					if buffer, _ := f.Pkg.Load("xl/" + r.Target); buffer != nil {
 						pic.File = buffer.([]byte)
 						pic.Format.AltText = cellImg.Pic.NvPicPr.CNvPr.Descr

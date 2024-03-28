@@ -12,10 +12,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/tiff"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func BenchmarkAddPictureFromBytes(b *testing.B) {
@@ -59,6 +58,8 @@ func TestAddPicture(t *testing.T) {
 
 	// Test add picture to worksheet from bytes
 	assert.NoError(t, f.AddPictureFromBytes("Sheet1", "Q1", &Picture{Extension: ".png", File: file, Format: &GraphicOptions{AltText: "Excel Logo"}}))
+	// Test add picture to worksheet from bytes with unsupported insert type
+	assert.Equal(t, ErrParameterInvalid, f.AddPictureFromBytes("Sheet1", "Q1", &Picture{Extension: ".png", File: file, Format: &GraphicOptions{AltText: "Excel Logo"}, InsertType: PictureInsertTypePlaceInCell}))
 	// Test add picture to worksheet from bytes with illegal cell reference
 	assert.Equal(t, newCellNameToCoordinatesError("A", newInvalidCellNameError("A")), f.AddPictureFromBytes("Sheet1", "A", &Picture{Extension: ".png", File: file, Format: &GraphicOptions{AltText: "Excel Logo"}}))
 
@@ -150,6 +151,7 @@ func TestGetPicture(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, pics[0].File, 13233)
 	assert.Empty(t, pics[0].Format.AltText)
+	assert.Equal(t, PictureInsertTypePlaceOverCells, pics[0].InsertType)
 
 	f, err = prepareTestBook1()
 	if !assert.NoError(t, err) {
@@ -249,6 +251,7 @@ func TestGetPicture(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, pics, 2)
 	assert.Equal(t, "CellImage1", pics[0].Format.AltText)
+	assert.Equal(t, PictureInsertTypeDISPIMG, pics[0].InsertType)
 
 	// Test get embedded cell pictures with invalid formula
 	assert.NoError(t, f.SetCellFormula("Sheet1", "A1", "=_xlfn.DISPIMG()"))
@@ -449,56 +452,85 @@ func TestGetCellImages(t *testing.T) {
 	assert.EqualError(t, err, "XML syntax error on line 1: invalid UTF-8")
 	assert.NoError(t, f.Close())
 
-	// Test get the Microsoft 365 cell images
-	f = NewFile()
-	assert.NoError(t, f.AddPicture("Sheet1", "A1", filepath.Join("test", "images", "excel.png"), nil))
-	f.Pkg.Store(defaultXMLMetadata, []byte(`<metadata><valueMetadata count="1"><bk><rc t="1" v="0"/></bk></valueMetadata></metadata>`))
-	f.Pkg.Store(defaultXMLRichDataRichValueRel, []byte(`<richValueRels><rel r:id="rId1"/></richValueRels>`))
-	f.Pkg.Store(defaultXMLRichDataRichValueRelRels, []byte(fmt.Sprintf(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="%s" Target="../media/image1.png"/></Relationships>`, SourceRelationshipImage)))
-	f.Sheet.Store("xl/worksheets/sheet1.xml", &xlsxWorksheet{
-		SheetData: xlsxSheetData{Row: []xlsxRow{
-			{R: 1, C: []xlsxC{{R: "A1", T: "e", V: formulaErrorVALUE, Vm: uintPtr(1)}}},
-		}},
-	})
+	// Test get the cell images
+	prepareWorkbook := func() *File {
+		f := NewFile()
+		assert.NoError(t, f.AddPicture("Sheet1", "A1", filepath.Join("test", "images", "excel.png"), nil))
+		f.Pkg.Store(defaultXMLMetadata, []byte(`<metadata><valueMetadata count="1"><bk><rc t="1" v="0"/></bk></valueMetadata></metadata>`))
+		f.Pkg.Store(defaultXMLRichDataRichValue, []byte(`<rvData count="1"><rv s="0"><v>0</v><v>5</v></rv></rvData>`))
+		f.Pkg.Store(defaultXMLRichDataRichValueRel, []byte(`<richValueRels><rel r:id="rId1"/></richValueRels>`))
+		f.Pkg.Store(defaultXMLRichDataRichValueRelRels, []byte(fmt.Sprintf(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="%s" Target="../media/image1.png"/></Relationships>`, SourceRelationshipImage)))
+		f.Sheet.Store("xl/worksheets/sheet1.xml", &xlsxWorksheet{
+			SheetData: xlsxSheetData{Row: []xlsxRow{
+				{R: 1, C: []xlsxC{{R: "A1", T: "e", V: formulaErrorVALUE, Vm: uintPtr(1)}}},
+			}},
+		})
+		return f
+	}
+	f = prepareWorkbook()
 	pics, err := f.GetPictures("Sheet1", "A1")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(pics))
+	assert.Equal(t, PictureInsertTypePlaceInCell, pics[0].InsertType)
 	cells, err := f.GetPictureCells("Sheet1")
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"A1"}, cells)
 
-	// Test get the Microsoft 365 cell images without image relationships parts
+	// Test get the cell images without image relationships parts
 	f.Relationships.Delete(defaultXMLRichDataRichValueRelRels)
 	f.Pkg.Store(defaultXMLRichDataRichValueRelRels, []byte(fmt.Sprintf(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="%s" Target="../media/image1.png"/></Relationships>`, SourceRelationshipHyperLink)))
 	pics, err = f.GetPictures("Sheet1", "A1")
 	assert.NoError(t, err)
 	assert.Empty(t, pics)
-	// Test get the Microsoft 365 cell images with unsupported charset rich data rich value relationships
+	// Test get the cell images with unsupported charset rich data rich value relationships
 	f.Relationships.Delete(defaultXMLRichDataRichValueRelRels)
 	f.Pkg.Store(defaultXMLRichDataRichValueRelRels, MacintoshCyrillicCharset)
 	pics, err = f.GetPictures("Sheet1", "A1")
 	assert.NoError(t, err)
 	assert.Empty(t, pics)
-	// Test get the Microsoft 365 cell images with unsupported charset rich data rich value
+	// Test get the cell images with unsupported charset rich data rich value
 	f.Pkg.Store(defaultXMLRichDataRichValueRel, MacintoshCyrillicCharset)
 	_, err = f.GetPictures("Sheet1", "A1")
 	assert.EqualError(t, err, "XML syntax error on line 1: invalid UTF-8")
-	// Test get the Microsoft 365 image cells without block of metadata records
+	// Test get the image cells without block of metadata records
 	cells, err = f.GetPictureCells("Sheet1")
 	assert.EqualError(t, err, "XML syntax error on line 1: invalid UTF-8")
 	assert.Empty(t, cells)
-	// Test get the Microsoft 365 cell images with rich data rich value relationships
+	// Test get the cell images with rich data rich value relationships
 	f.Pkg.Store(defaultXMLMetadata, []byte(`<metadata><valueMetadata count="1"><bk><rc t="1" v="0"/></bk></valueMetadata></metadata>`))
 	f.Pkg.Store(defaultXMLRichDataRichValueRel, []byte(`<richValueRels/>`))
 	pics, err = f.GetPictures("Sheet1", "A1")
 	assert.NoError(t, err)
 	assert.Empty(t, pics)
-	// Test get the Microsoft 365 cell images with unsupported charset meta data
+	// Test get the cell images with unsupported charset meta data
 	f.Pkg.Store(defaultXMLMetadata, MacintoshCyrillicCharset)
 	_, err = f.GetPictures("Sheet1", "A1")
 	assert.EqualError(t, err, "XML syntax error on line 1: invalid UTF-8")
-	// Test get the Microsoft 365 cell images without block of metadata records
+	// Test get the cell images without block of metadata records
 	f.Pkg.Store(defaultXMLMetadata, []byte(`<metadata><valueMetadata/></metadata>`))
+	pics, err = f.GetPictures("Sheet1", "A1")
+	assert.NoError(t, err)
+	assert.Empty(t, pics)
+
+	f = prepareWorkbook()
+	// Test get the cell images with empty image cell rich value
+	f.Pkg.Store(defaultXMLRichDataRichValue, []byte(`<rvData count="1"><rv s="0"><v></v><v>5</v></rv></rvData>`))
+	pics, err = f.GetPictures("Sheet1", "A1")
+	assert.EqualError(t, err, "strconv.Atoi: parsing \"\": invalid syntax")
+	assert.Empty(t, pics)
+	// Test get the cell images without image cell rich value
+	f.Pkg.Store(defaultXMLRichDataRichValue, []byte(`<rvData count="1"><rv s="0"><v>0</v><v>1</v></rv></rvData>`))
+	pics, err = f.GetPictures("Sheet1", "A1")
+	assert.NoError(t, err)
+	assert.Empty(t, pics)
+	// Test get the cell images with unsupported charset rich value
+	f.Pkg.Store(defaultXMLRichDataRichValue, MacintoshCyrillicCharset)
+	_, err = f.GetPictures("Sheet1", "A1")
+	assert.EqualError(t, err, "XML syntax error on line 1: invalid UTF-8")
+
+	f = prepareWorkbook()
+	// Test get the cell images with invalid rich value index
+	f.Pkg.Store(defaultXMLMetadata, []byte(`<metadata><valueMetadata count="1"><bk><rc t="1" v="1"/></bk></valueMetadata></metadata>`))
 	pics, err = f.GetPictures("Sheet1", "A1")
 	assert.NoError(t, err)
 	assert.Empty(t, pics)
